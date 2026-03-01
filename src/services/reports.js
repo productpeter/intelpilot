@@ -1,6 +1,6 @@
 import { col } from '../db/mongo.js';
 import { enrichEntities } from './enricher.js';
-import { isAggregatorUrl } from './extractor.js';
+import { isAggregatorUrl, isValidProductUrl } from './extractor.js';
 
 const SIGNAL_WEIGHTS = {
   revenue_claim: 25,
@@ -89,7 +89,21 @@ export async function generateWeeklyReport() {
     );
   }
 
-  const topItems = scoredItems.slice(0, 50);
+  const reportReady = scoredItems.filter((item) => {
+    const entity = item.entity;
+    const hasWebsite = !!entity.website_url && isValidProductUrl(entity.website_url);
+    const hasEnrichmentWebsite = entity.enrichment?.metrics?.website &&
+      isValidProductUrl(entity.enrichment.metrics.website.startsWith('http') ? entity.enrichment.metrics.website : `https://${entity.enrichment.metrics.website}`);
+    const hasRealDomain = entity.canonical_domain && !entity.canonical_domain.startsWith('reddit-') && entity.canonical_domain.includes('.');
+    if (hasWebsite || hasEnrichmentWebsite || hasRealDomain) return true;
+    if (entity.enrichment && !hasWebsite && !hasEnrichmentWebsite && !hasRealDomain) {
+      console.log(`[Reports] Excluding "${entity.name}" — enriched but no discoverable website`);
+      return false;
+    }
+    return true;
+  });
+
+  const topItems = reportReady.slice(0, 50);
 
   const reportItems = topItems.map((item) => {
     const pick = (type) => {
@@ -168,14 +182,14 @@ function resolveReportWebsite(entity, enrichmentMetrics, evidenceDocs) {
       : null,
   ];
 
-  for (const url of candidates) {
-    if (url && !isAggregatorUrl(url.startsWith('http') ? url : `https://${url}`)) {
-      return url.startsWith('http') ? url : `https://${url}`;
-    }
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const url = raw.startsWith('http') ? raw : `https://${raw}`;
+    if (isValidProductUrl(url)) return url;
   }
 
   for (const ev of evidenceDocs || []) {
-    if (ev.url && !isAggregatorUrl(ev.url)) {
+    if (ev.url && isValidProductUrl(ev.url)) {
       return ev.url;
     }
   }

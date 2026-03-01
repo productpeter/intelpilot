@@ -254,6 +254,27 @@ export function isAggregatorUrl(url) {
   }
 }
 
+export function isValidProductUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  if (/^https?:\/\/reddit-/i.test(url)) return false;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname || !parsed.hostname.includes('.')) return false;
+    if (parsed.hostname.startsWith('reddit-')) return false;
+    return !isAggregatorUrl(url);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeUrl(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  let url = raw.trim();
+  if (/^\//.test(url) || !url.includes('.')) return null;
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  return isValidProductUrl(url) ? url : null;
+}
+
 function extractDomain(url) {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, '');
@@ -264,33 +285,27 @@ function extractDomain(url) {
 }
 
 function resolveProductWebsite(structured, discoveryUrl) {
-  if (structured.product_website_url && !isAggregatorUrl(structured.product_website_url)) {
-    let url = structured.product_website_url;
-    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-    return url;
-  }
+  const fromSchema = normalizeUrl(structured.product_website_url);
+  if (fromSchema) return fromSchema;
 
   const links = structured.relevant_links || [];
   const homepageLabels = /^(homepage|website|home|official|visit|main site|product|app|try it|get started|landing)/i;
   for (const link of links) {
-    if (link.url && homepageLabels.test(link.label) && !isAggregatorUrl(link.url)) {
-      let url = link.url;
-      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-      return url;
+    if (link.url && homepageLabels.test(link.label)) {
+      const url = normalizeUrl(link.url);
+      if (url) return url;
     }
   }
 
   for (const link of links) {
-    if (link.url && !isAggregatorUrl(link.url) && !/github\.com|twitter\.com|x\.com/i.test(link.url)) {
-      let url = link.url;
-      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-      return url;
+    if (link.url && !/github\.com|twitter\.com|x\.com/i.test(link.url)) {
+      const url = normalizeUrl(link.url);
+      if (url) return url;
     }
   }
 
-  if (structured.domain && !isAggregatorUrl(`https://${structured.domain}`)) {
-    return `https://${structured.domain}`;
-  }
+  const fromDomain = normalizeUrl(structured.domain);
+  if (fromDomain) return fromDomain;
 
   return null;
 }

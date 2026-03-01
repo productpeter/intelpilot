@@ -1,6 +1,6 @@
 import { chatJson } from '../lib/openai.js';
 import { col } from '../db/mongo.js';
-import { isAggregatorUrl } from './extractor.js';
+import { isAggregatorUrl, isValidProductUrl } from './extractor.js';
 
 const SYSTEM_PROMPT = `You are an AI startup classifier. Given information about an entity discovered from the web, determine whether it represents an actual AI/ML startup or product.
 
@@ -16,7 +16,7 @@ Respond with JSON:
 
 Rules:
 - is_startup = true ONLY for AI/ML startups and products. The product must use AI, machine learning, LLMs, or related technology as a core feature.
-- is_startup = false for: non-AI startups (pure SaaS without AI, e-commerce, social networks, games without AI), news articles, opinion pieces, questions, personal blogs, established big tech (Google, Microsoft, OpenAI, Anthropic, Meta, etc.), general discussions, portfolio/personal websites, agencies, consulting firms, defunct projects, posts where someone talks about building something but never names the product
+- is_startup = false for: non-AI startups (pure SaaS without AI, e-commerce, social networks, games without AI), news articles, opinion pieces, questions, personal blogs, established/well-known companies (Google, Microsoft, OpenAI, Anthropic, Meta, Amazon, Apple, Notion, Slack, Figma, Stripe, Vercel, Supabase, Datadog, Cloudflare, etc.), general discussions, portfolio/personal websites, agencies, consulting firms, defunct projects, posts where someone talks about building something but never names the product
 - clean_name MUST be a short product/company name (1-4 words max), NOT a Reddit post title or sentence
 - If you cannot determine a clear product name, set clean_name to null and is_startup to false
 - website_url: This MUST be the startup's OWN product website (e.g. "https://nowigetit.us", "https://linear.app", "https://cursor.com").
@@ -48,10 +48,14 @@ export async function classifyEntity(entity, evidenceSnippet) {
 
     let websiteUrl = result.website_url || null;
     if (websiteUrl && !/^https?:\/\//i.test(websiteUrl)) {
-      websiteUrl = `https://${websiteUrl}`;
+      if (/^\//.test(websiteUrl) || !websiteUrl.includes('.')) {
+        websiteUrl = null;
+      } else {
+        websiteUrl = `https://${websiteUrl}`;
+      }
     }
-    if (websiteUrl && isAggregatorUrl(websiteUrl)) {
-      console.log(`[Classifier] Rejected aggregator URL as website: ${websiteUrl}`);
+    if (websiteUrl && !isValidProductUrl(websiteUrl)) {
+      console.log(`[Classifier] Rejected invalid URL as website: ${websiteUrl}`);
       websiteUrl = null;
     }
 
@@ -66,7 +70,7 @@ export async function classifyEntity(entity, evidenceSnippet) {
     };
 
     const existingWebsite = entity.website_url;
-    const shouldUpdateWebsite = websiteUrl && (!existingWebsite || isAggregatorUrl(existingWebsite));
+    const shouldUpdateWebsite = websiteUrl && (!existingWebsite || !isValidProductUrl(existingWebsite));
 
     const updates = {
       classification,

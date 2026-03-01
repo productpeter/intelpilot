@@ -1,7 +1,7 @@
 import { research } from '../lib/tabstack.js';
 import { chatJson } from '../lib/openai.js';
 import { col } from '../db/mongo.js';
-import { isAggregatorUrl } from './extractor.js';
+import { isAggregatorUrl, isValidProductUrl } from './extractor.js';
 
 const EXTRACT_PROMPT = `You are a startup data extractor. Given research text about a startup/company, extract structured metrics. Respond with JSON:
 
@@ -125,19 +125,22 @@ async function enrichSingle(entity) {
 
   let enrichedWebsite = metrics.website || null;
   if (enrichedWebsite && !/^https?:\/\//i.test(enrichedWebsite)) {
-    enrichedWebsite = `https://${enrichedWebsite}`;
+    if (/^\//.test(enrichedWebsite) || !enrichedWebsite.includes('.')) {
+      enrichedWebsite = null;
+    } else {
+      enrichedWebsite = `https://${enrichedWebsite}`;
+    }
   }
-  if (enrichedWebsite && isAggregatorUrl(enrichedWebsite)) {
-    console.log(`[Enricher] Rejected aggregator URL as website for "${name}": ${enrichedWebsite}`);
+  if (enrichedWebsite && !isValidProductUrl(enrichedWebsite)) {
+    console.log(`[Enricher] Rejected invalid URL as website for "${name}": ${enrichedWebsite}`);
     enrichedWebsite = null;
   }
 
   const hasRealData = nameMatches && !!(enrichedWebsite || metrics.revenue || metrics.funding || metrics.user_count || metrics.team_size || metrics.founded_year);
 
-  const existingUrlIsBad = !entity.website_url || isAggregatorUrl(entity.website_url);
   const entityUpdates = { 'enrichment.web_verified': hasRealData };
   if (nameMatches && metrics.description) entityUpdates.description = metrics.description;
-  if (nameMatches && enrichedWebsite && existingUrlIsBad) entityUpdates.website_url = enrichedWebsite;
+  if (nameMatches && enrichedWebsite) entityUpdates.website_url = enrichedWebsite;
 
   await col('entities').updateOne(
     { _id: entity._id },

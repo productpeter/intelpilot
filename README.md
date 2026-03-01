@@ -241,7 +241,7 @@ Sources (~500 candidates per scan)
     ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  Scanner (concurrent across all sources)                     │
-│  Product Hunt │ HN (40) │ RSS (4 feeds) │ 10x Reddit │ Beta │
+│  Product Hunt │ HN (40) │ RSS (4 feeds) │ 10x Reddit │ Beta  │
 └───────────────────────────┬──────────────────────────────────┘
                             │
                             ▼
@@ -257,7 +257,7 @@ Sources (~500 candidates per scan)
 │  7. Extract signals (regex heuristics)                       │
 │  8. LLM Classification (gpt-4o-mini)                         │
 │     → is_startup, clean_name, category, one_liner            │
-│     → website_url (aggregator URLs rejected)                 │
+│     → website_url (validated by isValidProductUrl)           │
 └───────────────────────────┬──────────────────────────────────┘
                             │
                             ▼
@@ -272,9 +272,11 @@ Sources (~500 candidates per scan)
 │     → GPT extracts: revenue, funding, users, team size,      │
 │       website URL, growth, founded year, domain status       │
 │     → Name-match validation (Levenshtein ≥ 0.7)             │
+│     → Research URL always preferred over extraction URL      │
 │     → Dead/parked domain auto-delist                         │
-│  4. Verification penalty (no web presence → score × 0.1)     │
-│  5. Rank top 50, build HTML + JSON report                    │
+│  4. Exclude entities with no discoverable website            │
+│  5. Verification penalty (no web presence → score × 0.1)     │
+│  6. Rank top 50, build HTML + JSON report                    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -293,11 +295,11 @@ Every entity is classified by OpenAI `gpt-4o-mini` after extraction. The classif
 | `category` | AI sub-category (e.g. AI Agent, LLM Tool, AI SaaS, AI Healthcare) |
 | `website_url` | Product's own website URL (aggregator URLs like PH/HN/Reddit are rejected) |
 
-**Filtered out:** non-AI startups, news articles, opinion pieces, questions, big tech (Google, OpenAI, etc.), portfolio sites, agencies, consulting firms, unnamed projects.
+**Filtered out:** non-AI startups, news articles, opinion pieces, questions, established/well-known companies (Google, Microsoft, OpenAI, Anthropic, Meta, Amazon, Apple, Notion, Slack, Figma, Stripe, Vercel, Supabase, Datadog, Cloudflare, etc.), portfolio sites, agencies, consulting firms, unnamed projects.
 
 **Name validation:** names longer than 40 characters or more than 5 words are rejected (entity marked as not a startup).
 
-**URL validation:** returned URLs are checked against a blocklist of 24+ aggregator domains. Aggregator URLs are rejected and set to `null`.
+**URL validation:** returned URLs are validated by `isValidProductUrl()` which rejects aggregator domains (24+ blocklist), pseudo-domains (`reddit-*`), URLs without a dot in the hostname, and path-only strings. Invalid URLs are set to `null`. The classifier only overrides an existing `website_url` if the current one fails validation.
 
 Cost: ~$0.001 per classification with gpt-4o-mini.
 
@@ -317,7 +319,7 @@ All classified AI startups are enriched via Tabstack's `/research` SSE endpoint 
 
 **Verification penalty:** entities that were enriched but have no web presence (no website URL, no real domain, and research found nothing) get their score reduced to 10%.
 
-**URL handling:** enricher can override a bad `website_url` (aggregator URL) with a proper one found during research, but won't replace a good URL.
+**URL handling:** when enrichment finds a website URL and the name matches, it **always updates** the entity's `website_url`. Research performs a thorough web search and is more reliable than the initial single-page extraction, which can pick up a plausible-looking but incorrect domain.
 
 **Enrichment runs:**
 - Automatically (background) when a report is generated — all unenriched entities
@@ -485,16 +487,17 @@ Each report entry includes:
 | Multi-source mentions | +3 per unique source |
 | Recency | +0 to +7 based on days since last update |
 | Verification penalty | ×0.1 if enriched but no web presence found |
+| No-website exclusion | Enriched entities with no discoverable website are excluded entirely |
 
 Top 50 entities by score are included. Reports are stored as both `report_json` (structured) and `report_html` (styled, self-contained HTML page).
 
 ### Website URL resolution (report-level)
 
-The report resolves each entity's website through a priority chain, skipping any aggregator URLs:
-1. `entity.website_url` (set by extractor or classifier)
+The report resolves each entity's website through a priority chain. All candidates are validated by `isValidProductUrl()`, which rejects aggregator URLs, pseudo-domains, and malformed URLs:
+1. `entity.website_url` (set by extractor, classifier, or enricher)
 2. `enrichment.metrics.website` (found during research)
-3. `entity.canonical_domain` (if not a pseudo-domain)
-4. Evidence URLs (first non-aggregator URL)
+3. `entity.canonical_domain` (if not a pseudo-domain and contains a dot)
+4. Evidence URLs (first valid product URL)
 
 ---
 
