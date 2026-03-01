@@ -255,15 +255,15 @@ Sources run **concurrently** during scans. Within each source, extractions run i
                    │
                    ▼
 ┌─────────────────────────────────────────┐
-│       Extractor (per candidate URL)      │
-│                                          │
-│  1. Tabstack /extract/json (structured)  │
-│  2. Tabstack /extract/markdown (text)    │
-│  3. Upload snapshot to R2 (optional)     │
-│  4. Store raw_page + evidence            │
-│  5. Resolve entity (dedup)               │
-│  6. Extract signals (regex heuristics)   │
-│  7. Store signals linked to entity       │
+│       Extractor (per candidate URL)     │
+│                                         │
+│  1. Tabstack /extract/json (structured) │
+│  2. Tabstack /extract/markdown (text)   │
+│  3. Upload snapshot to R2 (optional)    │
+│  4. Store raw_page + evidence           │
+│  5. Resolve entity (dedup)              │
+│  6. Extract signals (regex heuristics)  │
+│  7. Store signals linked to entity      │
 └──────────────────┬──────────────────────┘
                    │
                    ▼
