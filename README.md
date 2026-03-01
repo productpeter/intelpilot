@@ -29,7 +29,7 @@ Agentic research system that continuously monitors the web for **AI startup sign
 
 ## Product Goal
 
-Build an agentic research system that continuously monitors the web for new **AI startups and products**, classifies them using LLMs, enriches top entries with deep-web research, and produces ranked weekly intelligence reports with verified data and website URLs.
+Build an agentic research system that continuously monitors the web for new **AI startups and products**, classifies them using LLMs, enriches them with deep-web research, and produces ranked weekly intelligence reports with verified data and website URLs.
 
 This MVP covers **discovery + classification + enrichment + report generation**. No email/notifications.
 
@@ -37,13 +37,13 @@ This MVP covers **discovery + classification + enrichment + report generation**.
 
 ## How It Works
 
-1. **Scan** — Fetches candidates from 9 sources (Product Hunt, Hacker News, RSS feeds, 5 Reddit subreddits, BetaList)
-2. **Extract** — Uses Tabstack API to pull structured data from each candidate URL
+1. **Scan** — Fetches candidates from 14 source channels (Product Hunt, Hacker News top 40, 4 RSS/web feeds, 10 Reddit subreddits, BetaList)
+2. **Extract** — Uses Tabstack API to pull structured data from each candidate URL (including explicit product website URL detection)
 3. **Classify** — OpenAI `gpt-4o-mini` classifies each entity: is it an AI startup with an identifiable product name?
 4. **Deduplicate** — Three-tier entity resolution (domain match → name match → vector similarity via Atlas Vector Search)
-5. **Enrich** — Top entities are researched via Tabstack `/research` endpoint, then metrics are extracted with GPT
-6. **Verify** — Entities enriched but with no web presence (no website, no data found) are heavily penalized
-7. **Report** — Scored and ranked into an HTML + JSON report with website URLs, revenue, funding, users, and team size
+5. **Enrich** — All report entities are researched via Tabstack `/research` endpoint, then metrics are extracted with GPT (with name-matching validation and dead domain detection)
+6. **Verify** — Entities enriched but with no web presence are heavily penalized; parked/dead domains are auto-delisted
+7. **Report** — Scored and ranked into an HTML + JSON report (up to 50 entries) with website URLs, revenue, funding, users, and team size
 
 ---
 
@@ -88,17 +88,17 @@ src/
 ├── sources/
 │   ├── index.js             # Source registry
 │   ├── producthunt.js       # Product Hunt daily leaderboard
-│   ├── hackernews.js        # Hacker News Show HN (Firebase API)
-│   ├── rss.js               # TLDR AI + HN Newest feeds
-│   ├── reddit.js            # Multi-subreddit (SaaS, startups, indiehackers, artificial, LocalLLaMA)
+│   ├── hackernews.js        # Hacker News Show HN (top 40, Firebase API)
+│   ├── rss.js               # TLDR AI, HN Newest, HN Front Page, There's An AI For That
+│   ├── reddit.js            # 10 subreddits (SaaS, startups, indiehackers, artificial, LocalLLaMA, machinelearning, ChatGPT, singularity, OpenAI, AItools)
 │   └── betalist.js          # BetaList new startups (via Tabstack extract)
 ├── services/
 │   ├── scanner.js           # Concurrent scan orchestration
-│   ├── extractor.js         # Tabstack extraction + classifier integration
+│   ├── extractor.js         # Tabstack extraction + product URL resolution + classifier integration
 │   ├── classifier.js        # LLM startup classification (gpt-4o-mini)
-│   ├── enricher.js          # Tabstack /research enrichment pipeline
+│   ├── enricher.js          # Tabstack /research enrichment + name validation + dead domain detection
 │   ├── entities.js          # Entity resolution + vector dedup
-│   └── reports.js           # Report generation, scoring, HTML rendering
+│   └── reports.js           # Report generation, scoring, URL verification, HTML rendering
 ├── routes/
 │   ├── index.js             # Route aggregator
 │   ├── health.js            # GET /api/health
@@ -214,65 +214,68 @@ Require `Authorization: Bearer <ADMIN_TOKEN>` header (skipped in dev if token is
 | Endpoint | Method | Description |
 | --- | --- | --- |
 | `/api/admin/scan/run` | POST | Trigger a full scan (returns immediately, runs in background) |
-| `/api/admin/report/generate` | POST | Generate a report now (kicks off enrichment in background) |
+| `/api/admin/report/generate` | POST | Generate a report now (enriches all unenriched entities in background) |
 | `/api/admin/enrich` | POST | Manually trigger enrichment. Query: `?limit=15` |
 
 ---
 
 ## Sources
 
-| # | Source | Method | What it finds |
-| --- | --- | --- | --- |
-| 1 | **Product Hunt** | Tabstack JSON extraction on daily leaderboard | Product names, taglines, upvotes, websites, topics |
-| 2 | **Hacker News Show HN** | HN Firebase API (top 20 stories) | Titles, URLs, points, authors, comment counts |
-| 3 | **RSS Feeds** | Tabstack JSON extraction (TLDR AI, HN Newest) | Article titles, URLs, summaries, authors, dates, tags |
-| 4 | **Reddit** (5 subreddits) | Reddit JSON API (no Tabstack needed) | r/SaaS, r/startups, r/indiehackers, r/artificial, r/LocalLLaMA |
-| 5 | **BetaList** | Tabstack JSON extraction on betalist.com/startups | Startup names, taglines, tags, URLs |
+| # | Source | Method | Candidates | What it finds |
+| --- | --- | --- | --- | --- |
+| 1 | **Product Hunt** | Tabstack JSON extraction on daily leaderboard | ~20 | Product names, taglines, upvotes, websites, topics |
+| 2 | **Hacker News Show HN** | HN Firebase API (top 40 stories) | 40 | Titles, URLs, points, authors, comment counts |
+| 3 | **RSS / Web Feeds** | Tabstack JSON extraction | ~60 | TLDR AI, HN Newest, HN Front Page, There's An AI For That |
+| 4 | **Reddit** (10 subreddits) | Reddit JSON API | ~360 | r/SaaS (50), r/startups (50), r/indiehackers (50), r/artificial (40), r/LocalLLaMA (40), r/machinelearning (30), r/ChatGPT (30), r/singularity (20), r/OpenAI (20), r/AItools (30) |
+| 5 | **BetaList** | Tabstack JSON extraction on betalist.com/startups | ~20 | Startup names, taglines, tags, URLs |
 
-Reddit fetches from all 5 subreddits in parallel using the public JSON API. Reddit self-posts are processed directly from their content without Tabstack to avoid Reddit bot detection.
+All sources run concurrently during scans. Reddit fetches from all 10 subreddits in parallel using the public JSON API. Reddit self-posts are processed directly from their content without Tabstack to avoid Reddit bot detection.
 
 ---
 
 ## Pipeline Architecture
 
 ```
-Sources (9 channels)
+Sources (~500 candidates per scan)
     │
     ▼
-┌─────────────────────────────────────────────────┐
-│  Scanner (concurrent across all sources)        │
-│  Product Hunt │ HN │ RSS │ 5x Reddit │ BetaList │
-└────────────────────┬────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────┐
-│  Extractor (batched, 5 concurrent)              │
-│                                                 │
-│  1. Tabstack /extract/json (structured data)    │
-│  2. Tabstack /extract/markdown (full text)      │
-│  3. Upload snapshot to R2 (optional)            │
-│  4. Store raw_page + evidence                   │
-│  5. Resolve entity (3-tier dedup)               │
-│  6. Extract signals (regex heuristics)          │
-│  7. LLM Classification (gpt-4o-mini)            │
-│     → is_startup, clean_name, category,         │
-│       one_liner, website_url                    │
-└────────────────────┬────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────┐
-│  Report Generation                              │
-│                                                 │
-│  1. Filter: classification.is_startup = true    │
-│     AND classification.clean_name != null       │
-│  2. Score by signal weights + recency           │
-│  3. Research Enrichment (all report entries)    │
-│     → Tabstack /research SSE endpoint           │
-│     → GPT extracts: revenue, funding, users,    │
-│       team size, website URL, growth, founded   │
-│  4. Verification penalty (no web presence → 10%)│
-│  5. Rank top 30, build HTML + JSON report       │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Scanner (concurrent across all sources)                     │
+│  Product Hunt │ HN (40) │ RSS (4 feeds) │ 10x Reddit │ Beta │
+└───────────────────────────┬──────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Extractor (batched, 5 concurrent)                           │
+│                                                              │
+│  1. Tabstack /extract/json (structured data + product URL)   │
+│  2. Tabstack /extract/markdown (full text)                   │
+│  3. Resolve product website (from relevant_links, domain)    │
+│  4. Upload snapshot to R2 (optional)                         │
+│  5. Store raw_page + evidence                                │
+│  6. Resolve entity (3-tier dedup)                            │
+│  7. Extract signals (regex heuristics)                       │
+│  8. LLM Classification (gpt-4o-mini)                         │
+│     → is_startup, clean_name, category, one_liner            │
+│     → website_url (aggregator URLs rejected)                 │
+└───────────────────────────┬──────────────────────────────────┘
+                            │
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Report Generation                                           │
+│                                                              │
+│  1. Filter: classification.is_startup = true                 │
+│     AND classification.clean_name != null                    │
+│  2. Score by signal weights + recency                        │
+│  3. Research Enrichment (all unenriched entities, background)│
+│     → Tabstack /research SSE endpoint                        │
+│     → GPT extracts: revenue, funding, users, team size,      │
+│       website URL, growth, founded year, domain status       │
+│     → Name-match validation (Levenshtein ≥ 0.7)             │
+│     → Dead/parked domain auto-delist                         │
+│  4. Verification penalty (no web presence → score × 0.1)     │
+│  5. Rank top 50, build HTML + JSON report                    │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -288,11 +291,13 @@ Every entity is classified by OpenAI `gpt-4o-mini` after extraction. The classif
 | `clean_name` | Actual product name (1-4 words, not a Reddit title or headline) |
 | `one_liner` | Concise description of what the product does |
 | `category` | AI sub-category (e.g. AI Agent, LLM Tool, AI SaaS, AI Healthcare) |
-| `website_url` | Product website extracted from evidence (if available) |
+| `website_url` | Product's own website URL (aggregator URLs like PH/HN/Reddit are rejected) |
 
 **Filtered out:** non-AI startups, news articles, opinion pieces, questions, big tech (Google, OpenAI, etc.), portfolio sites, agencies, consulting firms, unnamed projects.
 
 **Name validation:** names longer than 40 characters or more than 5 words are rejected (entity marked as not a startup).
+
+**URL validation:** returned URLs are checked against a blocklist of 24+ aggregator domains. Aggregator URLs are rejected and set to `null`.
 
 Cost: ~$0.001 per classification with gpt-4o-mini.
 
@@ -300,19 +305,23 @@ Cost: ~$0.001 per classification with gpt-4o-mini.
 
 ## Research Enrichment
 
-Top-ranked AI startups are enriched via Tabstack's `/research` SSE endpoint for deeper, verified data.
+All classified AI startups are enriched via Tabstack's `/research` SSE endpoint for deeper, verified data.
 
 **Pipeline:**
 1. Tabstack `/research` searches the web for the startup (asking specifically for website URL, revenue, funding, team size, users, growth)
-2. The research report (streamed via SSE) is fed to `gpt-4o-mini` to extract structured metrics
-3. Extracted data is stored on the entity and new signals are created
-4. A `web_verified` flag is set — if research found real data, the entity is verified; if all metrics are null, it's unverified
+2. The research report (streamed via SSE) is fed to `gpt-4o-mini` to extract structured metrics plus `matched_name` and `domain_status`
+3. **Name validation:** the `matched_name` from the research is compared to the entity name (substring match or Levenshtein ratio ≥ 0.7). If they don't match, the description, website, and signals are **not** overwritten (prevents contamination from similarly-named companies)
+4. **Domain status:** if the research indicates the domain is `parked`, `for_sale`, or `dead`, the entity is automatically marked as not a startup and excluded from future reports
+5. A `web_verified` flag is set — if research found real data (and names matched), the entity is verified; otherwise it's unverified
+6. Extracted data is stored on the entity and new signals are created (only if name matched)
 
 **Verification penalty:** entities that were enriched but have no web presence (no website URL, no real domain, and research found nothing) get their score reduced to 10%.
 
+**URL handling:** enricher can override a bad `website_url` (aggregator URL) with a proper one found during research, but won't replace a good URL.
+
 **Enrichment runs:**
-- Automatically (background) when a report is generated — top 15 unenriched entities
-- Manually via `POST /api/admin/enrich?limit=15`
+- Automatically (background) when a report is generated — all unenriched entities
+- Manually via `POST /api/admin/enrich?limit=N`
 
 Cost: ~1 Tabstack credit per `/research` call.
 
@@ -364,12 +373,12 @@ Cost: ~1 Tabstack credit per `/research` call.
 | --- | --- | --- |
 | `name` | string | Company/product name (cleaned by LLM classifier) |
 | `canonical_domain` | string | Primary domain (nullable) |
-| `description` | string | Short description (set by classifier or enricher) |
+| `description` | string | Short description (set by classifier or enricher, only if name matched) |
 | `tags` | string[] | Category tags |
 | `identifiers` | object | `{ github, twitter, producthunt, hackernews, reddit }` |
-| `website_url` | string | Actual product website URL (nullable) |
-| `classification` | object | LLM classification result (see [LLM Classification](#llm-classification)) |
-| `enrichment` | object | Research enrichment data: `{ research_text, metrics, web_verified, enriched_at }` |
+| `website_url` | string | Actual product website URL, aggregator URLs excluded (nullable) |
+| `classification` | object | LLM classification: `{ is_startup, confidence, clean_name, one_liner, category, website_url, classified_at }` |
+| `enrichment` | object | Research enrichment: `{ research_text, metrics, name_matched, web_verified, domain_status, enriched_at }` |
 | `created_at` | Date | Creation time |
 | `updated_at` | Date | Last update time |
 | `embedding` | number[] | 3072-dim vector (nullable) |
@@ -459,7 +468,7 @@ Reports are generated on schedule (`0 9 * * 1` = Monday 9am) or on demand via `P
 Each report entry includes:
 - Entity name (clickable link to product website)
 - AI category badge
-- Website URL
+- Website URL (verified against aggregator blocklist; falls back to evidence URLs)
 - Metric badges: Revenue, Funding, Users, Growth, Team Size
 - Notable facts (YC batch, awards, notable customers)
 - Short description
@@ -477,7 +486,15 @@ Each report entry includes:
 | Recency | +0 to +7 based on days since last update |
 | Verification penalty | ×0.1 if enriched but no web presence found |
 
-Top 30 entities by score are included. Reports are stored as both `report_json` (structured) and `report_html` (styled, self-contained HTML page).
+Top 50 entities by score are included. Reports are stored as both `report_json` (structured) and `report_html` (styled, self-contained HTML page).
+
+### Website URL resolution (report-level)
+
+The report resolves each entity's website through a priority chain, skipping any aggregator URLs:
+1. `entity.website_url` (set by extractor or classifier)
+2. `enrichment.metrics.website` (found during research)
+3. `entity.canonical_domain` (if not a pseudo-domain)
+4. Evidence URLs (first non-aggregator URL)
 
 ---
 
