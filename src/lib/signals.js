@@ -41,6 +41,35 @@ const SIGNAL_PATTERNS = {
     { regex: /Show HN:/i, confidence: 0.9 },
     { regex: /(?:Product\s*Hunt|ProductHunt)\s+(?:launch|today)/i, confidence: 0.85 },
   ],
+  funding_raised: [
+    { regex: /(?:raised|closed|secured)\s*\$[\d,.]+[kKmMbB]?\s*(?:seed|pre-seed|series\s*[a-d]|round)?/i, confidence: 0.9 },
+    { regex: /\$[\d,.]+[kKmMbB]?\s*(?:seed|pre-seed|series\s*[a-d])\s*(?:round|funding)/i, confidence: 0.9 },
+    { regex: /(?:YC|Y\s*Combinator|Techstars|500\s*Startups)\s*(?:[WSF]\d{2})?/i, confidence: 0.85 },
+    { regex: /(?:backed\s*by|funded\s*by|invested\s*by)\s*[\w\s]+/i, confidence: 0.7 },
+    { regex: /\bbootstrapped\b/i, confidence: 0.75 },
+  ],
+  growth_rate: [
+    { regex: /(?:grew|growth|growing)\s*\d+%\s*(?:MoM|month.over.month|monthly)/i, confidence: 0.9 },
+    { regex: /(?:grew|growth|growing)\s*\d+%\s*(?:YoY|year.over.year|annually)/i, confidence: 0.9 },
+    { regex: /(?:doubled|tripled|10x|2x|3x|5x)\s*(?:in|over|within)\s*\d+\s*(?:months?|weeks?|years?)/i, confidence: 0.85 },
+    { regex: /(?:\d+x|\d+%)\s*(?:revenue|user|customer|growth)\s*(?:growth|increase)?/i, confidence: 0.8 },
+    { regex: /(?:from\s*\$?[\d,.]+[kKmM]?\s*to\s*\$?[\d,.]+[kKmM]?)/i, confidence: 0.75 },
+  ],
+  team_size: [
+    { regex: /\b(?:solo\s*founder|solopreneur|one.person|1.person)\b/i, confidence: 0.85 },
+    { regex: /\b(?:team\s*of|crew\s*of)\s*(\d+)/i, confidence: 0.8 },
+    { regex: /\b(\d+)[\s-]*(?:person|people|member|employee)\s*(?:team|company|startup)?/i, confidence: 0.8 },
+    { regex: /\b(?:co-?founders?|founding\s*team)\b/i, confidence: 0.7 },
+    { regex: /\b(\d+)\s*(?:employees|engineers|developers)\b/i, confidence: 0.8 },
+  ],
+  user_count: [
+    { regex: /(\d[\d,]*[kKmM]?)\s*(?:DAU|daily\s*active\s*users)/i, confidence: 0.9 },
+    { regex: /(\d[\d,]*[kKmM]?)\s*(?:MAU|monthly\s*active\s*users)/i, confidence: 0.9 },
+    { regex: /(\d[\d,]*[kKmM]?)\s*(?:downloads|installs)/i, confidence: 0.8 },
+    { regex: /(\d[\d,]*[kKmM]?)\s*(?:signups?|sign-ups?|registered\s*users)/i, confidence: 0.8 },
+    { regex: /(?:waitlist|wait\s*list)\s*(?:of)?\s*(\d[\d,]*[kKmM]?)/i, confidence: 0.8 },
+    { regex: /(\d[\d,]*[kKmM]?)\s*(?:on\s*(?:the\s*)?waitlist|on\s*wait\s*list)/i, confidence: 0.8 },
+  ],
 };
 
 export function extractSignals(text, snippets = []) {
@@ -93,9 +122,16 @@ function parseUnit(text) {
   if (/revenue/i.test(text)) return 'revenue';
   if (/profit|income/i.test(text)) return 'profit';
   if (/sales/i.test(text)) return 'sales';
-  if (/month|\/mo/i.test(text)) return 'per_month';
-  if (/year|annually|\/yr/i.test(text)) return 'per_year';
+  if (/month|\/mo|MoM/i.test(text)) return 'per_month';
+  if (/year|annually|\/yr|YoY/i.test(text)) return 'per_year';
+  if (/DAU/i.test(text)) return 'DAU';
+  if (/MAU/i.test(text)) return 'MAU';
+  if (/downloads?|installs?/i.test(text)) return 'downloads';
+  if (/signups?|registered/i.test(text)) return 'signups';
+  if (/waitlist/i.test(text)) return 'waitlist';
   if (/users?/i.test(text)) return 'users';
   if (/customers?/i.test(text)) return 'customers';
+  if (/employees?|engineers?|developers?|people|person|team/i.test(text)) return 'team';
+  if (/seed|series|round|funding/i.test(text)) return 'funding';
   return null;
 }

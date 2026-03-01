@@ -2,11 +2,34 @@ import { col } from '../db/mongo.js';
 
 const SIGNAL_WEIGHTS = {
   revenue_claim: 25,
+  funding_raised: 20,
+  growth_rate: 15,
   customer_count_claim: 10,
+  user_count: 10,
+  team_size: 5,
   pricing_present: 7,
   launch_announcement: 4,
   trend_indicator: 1,
 };
+
+const BLOCKED_DOMAINS = new Set([
+  'reuters.com', 'sciencedaily.com', 'nytimes.com', 'bbc.com', 'cnn.com',
+  'theguardian.com', 'washingtonpost.com', 'techcrunch.com', 'theverge.com',
+  'arstechnica.com', 'wired.com', 'bloomberg.com', 'forbes.com',
+  'github.com', 'gitlab.com', 'wikipedia.org',
+  'redis.io', 'openai.com', 'google.com', 'microsoft.com', 'apple.com',
+  'amazon.com', 'meta.com', 'anthropic.com', 'nvidia.com', 'x.com',
+  'twitter.com', 'facebook.com', 'instagram.com', 'youtube.com',
+  'linkedin.com', 'medium.com', 'substack.com', 'xcancel.com',
+]);
+
+const BLOCKED_NAMES = /^(openai|google|microsoft|apple|amazon|meta|anthropic|nvidia|redis|claude|chatgpt|twitter|facebook|instagram|youtube)$/i;
+
+function isStartupEntity(entity) {
+  if (entity.canonical_domain && BLOCKED_DOMAINS.has(entity.canonical_domain)) return false;
+  if (BLOCKED_NAMES.test(entity.name)) return false;
+  return true;
+}
 
 export async function generateWeeklyReport() {
   const now = new Date();
@@ -14,11 +37,12 @@ export async function generateWeeklyReport() {
 
   console.log('[Reports] Generating weekly report…');
 
-  const entities = await col('entities')
+  const entities = (await col('entities')
     .find({ updated_at: { $gte: oneWeekAgo } })
     .sort({ updated_at: -1 })
     .limit(200)
-    .toArray();
+    .toArray())
+    .filter(isStartupEntity);
 
   const scoredItems = [];
 
@@ -59,10 +83,10 @@ export async function generateWeeklyReport() {
   const topItems = scoredItems.slice(0, 30);
 
   const reportItems = topItems.map((item) => {
-    const revSignals = item.signals.filter((s) => s.signal_type === 'revenue_claim');
-    const revenue = revSignals.length
-      ? revSignals.map((s) => s.value_text).join('; ')
-      : null;
+    const pick = (type) => {
+      const found = item.signals.filter((s) => s.signal_type === type);
+      return found.length ? [...new Set(found.map((s) => s.value_text))].join('; ') : null;
+    };
 
     return {
       entity_id: item.entity._id,
@@ -70,7 +94,11 @@ export async function generateWeeklyReport() {
       domain: item.entity.canonical_domain,
       description: item.entity.description,
       tags: item.entity.tags,
-      revenue,
+      revenue: pick('revenue_claim'),
+      funding: pick('funding_raised'),
+      growth: pick('growth_rate'),
+      users: pick('user_count') || pick('customer_count_claim'),
+      team: pick('team_size'),
       score: Math.round(item.score * 100) / 100,
       source_count: item.sourceCount,
       avg_confidence: Math.round(item.avgConfidence * 100) / 100,
@@ -150,11 +178,17 @@ function buildReportHtml(reportJson) {
           ${item.domain ? `<span class="domain">${esc(item.domain)}</span>` : ''}
           <span class="score">Score ${item.score}</span>
         </div>
-        ${item.revenue ? `<div class="revenue">Revenue: ${esc(item.revenue)}</div>` : ''}
+        <div class="badges">
+        ${item.revenue ? `<span class="badge revenue">Revenue: ${esc(item.revenue)}</span>` : ''}
+        ${item.funding ? `<span class="badge funding">Funding: ${esc(item.funding)}</span>` : ''}
+        ${item.users ? `<span class="badge users">Users: ${esc(item.users)}</span>` : ''}
+        ${item.growth ? `<span class="badge growth">Growth: ${esc(item.growth)}</span>` : ''}
+        ${item.team ? `<span class="badge team">Team: ${esc(item.team)}</span>` : ''}
+        </div>
         <p class="desc">${esc(item.description || 'No description')}</p>
         ${item.tags?.length ? `<div class="tags">${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join(' ')}</div>` : ''}
-        <details open><summary>Signals</summary><ul>${signalsHtml || '<li>None</li>'}</ul></details>
-        <details open><summary>Evidence</summary><ul>${evidenceHtml || '<li>None</li>'}</ul></details>
+        <details><summary>Signals</summary><ul>${signalsHtml || '<li>None</li>'}</ul></details>
+        <details><summary>Evidence</summary><ul>${evidenceHtml || '<li>None</li>'}</ul></details>
         <div class="meta">Sources: ${item.source_count} · Avg confidence: ${Math.round(item.avg_confidence * 100)}%</div>
       </div>`;
     })
@@ -178,7 +212,13 @@ header p{opacity:.8;font-size:.95rem}
 .card-hd h3{font-size:1.1rem;color:#1a1a2e}
 .domain{color:#666;font-size:.82rem}
 .score{background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:12px;font-size:.78rem;font-weight:600}
-.revenue{background:#fff3e0;color:#e65100;padding:4px 12px;border-radius:8px;font-size:.9rem;font-weight:700;margin-bottom:.6rem;display:inline-block}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.6rem}
+.badge{padding:4px 12px;border-radius:8px;font-size:.82rem;font-weight:600;display:inline-block}
+.revenue{background:#fff3e0;color:#e65100}
+.funding{background:#e8eaf6;color:#283593}
+.users{background:#e0f2f1;color:#00695c}
+.growth{background:#fce4ec;color:#c62828}
+.team{background:#f3e5f5;color:#6a1b9a}
 .desc{color:#555;margin-bottom:.6rem}
 .tags{margin-bottom:.6rem}
 .tag{display:inline-block;background:#e3f2fd;color:#1565c0;padding:2px 10px;border-radius:12px;font-size:.76rem;margin:2px}

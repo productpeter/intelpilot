@@ -14,8 +14,16 @@ export default {
 
     const posts = data?.data?.children || [];
 
+    const STARTUP_PATTERN =
+      /\b(built|launched|building|ship|saas|mrr|arr|revenue|users|customers|side.?project|my app|my tool|my product|startup|bootstrapped|indie.?hack|first sale|paying customer|open.?source|beta|mvp|launch|product.?hunt)\b/i;
+
     return posts
-      .filter((p) => p.data && !p.data.stickied)
+      .filter((p) => {
+        if (!p.data || p.data.stickied) return false;
+        const d = p.data;
+        const text = `${d.title} ${d.selftext || ''} ${d.link_flair_text || ''}`;
+        return STARTUP_PATTERN.test(text);
+      })
       .map((p) => {
         const d = p.data;
         const isExternal = d.url && !d.url.includes('reddit.com');

@@ -48,7 +48,25 @@ const GENERIC_PAGE_SCHEMA = {
       type: 'array',
       items: { type: 'string' },
       description:
-        'Claims about number of customers or users (e.g. "500 customers", "10k users")',
+        'Claims about number of customers or users (e.g. "500 customers", "10k users", "50K DAU", "1M downloads")',
+    },
+    funding_mentions: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Any funding or investment mentions (e.g. "$2M seed round", "raised $500K", "bootstrapped", "YC W24", "backed by Sequoia")',
+    },
+    growth_mentions: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Growth rate claims (e.g. "grew 30% MoM", "doubled in 3 months", "10x in a year", "3x revenue growth")',
+    },
+    team_size_mentions: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Team or employee count (e.g. "solo founder", "team of 5", "2-person startup", "50 employees")',
     },
     relevant_links: {
       type: 'array',
@@ -148,6 +166,9 @@ export async function processDiscovery(discovery, sourceDoc) {
     structured.pricing_text,
     ...(structured.revenue_mentions || []),
     ...(structured.customer_count_mentions || []),
+    ...(structured.funding_mentions || []),
+    ...(structured.growth_mentions || []),
+    ...(structured.team_size_mentions || []),
     ...snippets,
   ]
     .filter(Boolean)
@@ -237,6 +258,9 @@ function buildStructuredFromMeta(discovery) {
     pricing_text: null,
     revenue_mentions: [],
     customer_count_mentions: [],
+    funding_mentions: [],
+    growth_mentions: [],
+    team_size_mentions: [],
     relevant_links: [],
     tags: m.tags || [],
   };
