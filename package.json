@@ -1,20 +1,24 @@
 {
   "name": "intelpilot",
   "version": "1.0.0",
-  "description": "IntelPilot Express.js API",
+  "description": "Agentic research system for web intelligence monitoring",
+  "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js"
   },
-  "keywords": [],
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.723.0",
+    "axios": "^1.7.9",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
-    "morgan": "^1.10.0"
+    "mongodb": "^6.12.0",
+    "morgan": "^1.10.0",
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"

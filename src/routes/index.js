@@ -1,9 +1,14 @@
-const { Router } = require('express');
+import { Router } from 'express';
+import healthRouter from './health.js';
+import reportsRouter from './reports.js';
+import entitiesRouter from './entities.js';
+import adminRouter from './admin.js';
 
 const router = Router();
 
-router.get('/health', (req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
-});
+router.use('/health', healthRouter);
+router.use('/reports', reportsRouter);
+router.use('/entities', entitiesRouter);
+router.use('/admin', adminRouter);
 
-module.exports = router;
+export default router;

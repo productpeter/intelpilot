@@ -1,9 +1,20 @@
-require('dotenv').config();
+import 'dotenv/config';
+import app from './app.js';
+import config from './config/index.js';
+import { connectDb } from './db/mongo.js';
+import { startCronJobs } from './cron/index.js';
 
-const app = require('./app');
+async function main() {
+  await connectDb();
+  startCronJobs();
 
-const PORT = process.env.PORT || 3000;
+  app.listen(config.port, () => {
+    console.log(`IntelPilot running on http://localhost:${config.port}`);
+    console.log(`Environment: ${config.env}`);
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+main().catch((err) => {
+  console.error('Failed to start:', err);
+  process.exit(1);
 });

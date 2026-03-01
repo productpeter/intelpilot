@@ -1,10 +1,10 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-
-const routes = require('./routes');
-const errorHandler = require('./middleware/errorHandler');
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import routes from './routes/index.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import { col } from './db/mongo.js';
 
 const app = express();
 
@@ -16,6 +16,16 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/api', routes);
 
+app.get('/report', async (req, res, next) => {
+  try {
+    const report = await col('reports').findOne({}, { sort: { generated_at: -1 } });
+    if (!report) return res.status(404).send('<h1>No reports generated yet</h1>');
+    res.type('html').send(report.report_html);
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.use(errorHandler);
 
-module.exports = app;
+export default app;
