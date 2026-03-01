@@ -1,11 +1,16 @@
 import axios from 'axios';
 
 const SUBREDDITS = [
-  { sub: 'SaaS', limit: 30 },
-  { sub: 'startups', limit: 30 },
-  { sub: 'indiehackers', limit: 30 },
-  { sub: 'artificial', limit: 20 },
-  { sub: 'LocalLLaMA', limit: 20 },
+  { sub: 'SaaS', limit: 50 },
+  { sub: 'startups', limit: 50 },
+  { sub: 'indiehackers', limit: 50 },
+  { sub: 'artificial', limit: 40 },
+  { sub: 'LocalLLaMA', limit: 40 },
+  { sub: 'machinelearning', limit: 30 },
+  { sub: 'ChatGPT', limit: 30 },
+  { sub: 'singularity', limit: 20 },
+  { sub: 'OpenAI', limit: 20 },
+  { sub: 'AItools', limit: 30 },
 ];
 
 const UA = { 'User-Agent': 'IntelPilot/1.0' };

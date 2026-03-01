@@ -29,7 +29,7 @@ export async function generateWeeklyReport() {
       'classification.clean_name': { $ne: null },
     })
     .sort({ updated_at: -1 })
-    .limit(200)
+    .limit(500)
     .toArray();
 
   const scoredItems = [];

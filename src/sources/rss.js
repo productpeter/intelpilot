@@ -43,6 +43,16 @@ const FEEDS = [
     url: 'https://news.ycombinator.com/newest',
     label: 'Hacker News New',
   },
+  {
+    name: 'theresanaiforthat',
+    url: 'https://theresanaiforthat.com/new/',
+    label: "There's An AI For That - New",
+  },
+  {
+    name: 'hn_top',
+    url: 'https://news.ycombinator.com/',
+    label: 'Hacker News Front Page',
+  },
 ];
 
 export default {
