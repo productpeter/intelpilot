@@ -1,4 +1,36 @@
-import { extractJson, SCHEMAS } from '../lib/tabstack.js';
+import { extractJson } from '../lib/tabstack.js';
+
+const SCHEMA = {
+  type: 'object',
+  properties: {
+    articles: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Article title' },
+          url: { type: 'string', description: 'Article URL' },
+          summary: {
+            type: ['string', 'null'],
+            description: 'Article summary or excerpt',
+          },
+          author: { type: ['string', 'null'], description: 'Author name' },
+          published_date: {
+            type: ['string', 'null'],
+            description: 'Publication date',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Category or topic tags',
+          },
+        },
+        required: ['title', 'url'],
+      },
+    },
+  },
+  required: ['articles'],
+};
 
 const FEEDS = [
   {
@@ -22,9 +54,7 @@ export default {
 
     for (const feed of FEEDS) {
       try {
-        const result = await extractJson(feed.url, SCHEMAS.rssFeedPage, {
-          nocache: true,
-        });
+        const result = await extractJson(feed.url, SCHEMA, { nocache: true });
 
         for (const article of result.articles || []) {
           candidates.push({

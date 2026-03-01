@@ -1,11 +1,20 @@
 const SIGNAL_PATTERNS = {
   revenue_claim: [
-    { regex: /\$[\d,.]+[kKmMbB]?\s*(?:MRR|ARR|revenue)/i, confidence: 0.85 },
-    { regex: /(?:MRR|ARR|revenue)\s*(?:of|:)\s*\$[\d,.]+[kKmMbB]?/i, confidence: 0.85 },
+    { regex: /\$[\d,.]+[kKmMbB]?\s*(?:MRR|ARR|revenue)/i, confidence: 0.9 },
+    { regex: /(?:MRR|ARR|revenue)\s*(?:of|:)?\s*\$[\d,.]+[kKmMbB]?/i, confidence: 0.9 },
     {
-      regex: /(?:making|earning|generating)\s*\$[\d,.]+[kKmMbB]?\s*(?:per\s*month|monthly|annually|per\s*year)/i,
-      confidence: 0.75,
+      regex: /(?:making|earning|generating|doing|hitting|reached|crossed)\s*\$[\d,.]+[kKmMbB]?\s*(?:per\s*month|monthly|annually|per\s*year|\/mo|\/yr)?/i,
+      confidence: 0.85,
     },
+    {
+      regex: /(?:run[- ]?rate|gross\s*revenue|net\s*revenue|total\s*revenue|recurring\s*revenue)\s*(?:of|:)?\s*\$[\d,.]+[kKmMbB]?/i,
+      confidence: 0.9,
+    },
+    { regex: /\$[\d,.]+[kKmMbB]?\s*(?:\/\s*(?:mo|month|year|yr))\s*(?:in\s+)?revenue/i, confidence: 0.85 },
+    { regex: /(?:grew|growth|from)\s*\$[\d,.]+[kKmMbB]?\s*to\s*\$[\d,.]+[kKmMbB]?/i, confidence: 0.8 },
+    { regex: /\b\d+[kKmM]\s*(?:MRR|ARR)\b/i, confidence: 0.85 },
+    { regex: /(?:profit|income|sales)\s*(?:of|:)?\s*\$[\d,.]+[kKmMbB]?/i, confidence: 0.75 },
+    { regex: /(?:bootstrapped|self-funded)\s*to\s*\$[\d,.]+[kKmMbB]?/i, confidence: 0.8 },
   ],
   customer_count_claim: [
     { regex: /(\d[\d,]*)\s*(?:customers|users|clients|teams|companies)/i, confidence: 0.8 },
@@ -14,6 +23,7 @@ const SIGNAL_PATTERNS = {
       confidence: 0.8,
     },
     { regex: /(\d+[kKmM]\+?)\s*(?:customers|users|downloads)/i, confidence: 0.75 },
+    { regex: /(?:paying)\s*(?:customers|users)\s*[:=]?\s*(\d[\d,kKmM]*)/i, confidence: 0.85 },
   ],
   pricing_present: [
     { regex: /\$\d+[\d,.]*\s*\/\s*(?:mo|month|year|yr|user|seat)/i, confidence: 0.9 },
@@ -81,8 +91,10 @@ function parseUnit(text) {
   if (/MRR/i.test(text)) return 'MRR';
   if (/ARR/i.test(text)) return 'ARR';
   if (/revenue/i.test(text)) return 'revenue';
-  if (/month/i.test(text)) return 'per_month';
-  if (/year|annually/i.test(text)) return 'per_year';
+  if (/profit|income/i.test(text)) return 'profit';
+  if (/sales/i.test(text)) return 'sales';
+  if (/month|\/mo/i.test(text)) return 'per_month';
+  if (/year|annually|\/yr/i.test(text)) return 'per_year';
   if (/users?/i.test(text)) return 'users';
   if (/customers?/i.test(text)) return 'customers';
   return null;

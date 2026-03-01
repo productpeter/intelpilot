@@ -1,11 +1,11 @@
 import { col } from '../db/mongo.js';
 
 const SIGNAL_WEIGHTS = {
-  revenue_claim: 10,
-  customer_count_claim: 8,
+  revenue_claim: 25,
+  customer_count_claim: 10,
   pricing_present: 7,
-  launch_announcement: 5,
-  trend_indicator: 2,
+  launch_announcement: 4,
+  trend_indicator: 1,
 };
 
 export async function generateWeeklyReport() {
@@ -34,10 +34,13 @@ export async function generateWeeklyReport() {
 
     const sourceCount = new Set(signals.map((s) => s.source_id?.toString())).size;
 
+    const hasRevenue = signals.some((s) => s.signal_type === 'revenue_claim');
+
     let score = 0;
     for (const sig of signals) {
       score += (SIGNAL_WEIGHTS[sig.signal_type] || 1) * sig.confidence;
     }
+    if (hasRevenue) score += 100;
     score += sourceCount * 3;
     const daysSinceUpdate = (now - entity.updated_at) / (1000 * 60 * 60 * 24);
     score += Math.max(0, 7 - daysSinceUpdate);
@@ -46,32 +49,43 @@ export async function generateWeeklyReport() {
       ? signals.reduce((sum, s) => sum + s.confidence, 0) / signals.length
       : 0;
 
-    scoredItems.push({ entity, signals, evidence: evidenceDocs, score, sourceCount, avgConfidence });
+    scoredItems.push({ entity, signals, evidence: evidenceDocs, score, sourceCount, avgConfidence, hasRevenue });
   }
 
-  scoredItems.sort((a, b) => b.score - a.score);
+  scoredItems.sort((a, b) => {
+    if (a.hasRevenue !== b.hasRevenue) return a.hasRevenue ? -1 : 1;
+    return b.score - a.score;
+  });
   const topItems = scoredItems.slice(0, 30);
 
-  const reportItems = topItems.map((item) => ({
-    entity_id: item.entity._id,
-    entity_name: item.entity.name,
-    domain: item.entity.canonical_domain,
-    description: item.entity.description,
-    tags: item.entity.tags,
-    score: Math.round(item.score * 100) / 100,
-    source_count: item.sourceCount,
-    avg_confidence: Math.round(item.avgConfidence * 100) / 100,
-    signals: item.signals.map((s) => ({
-      type: s.signal_type,
-      value: s.value_text,
-      confidence: s.confidence,
-    })),
-    evidence: item.evidence.slice(0, 3).map((e) => ({
-      url: e.url,
-      snippet: e.snippet,
-      type: e.type,
-    })),
-  }));
+  const reportItems = topItems.map((item) => {
+    const revSignals = item.signals.filter((s) => s.signal_type === 'revenue_claim');
+    const revenue = revSignals.length
+      ? revSignals.map((s) => s.value_text).join('; ')
+      : null;
+
+    return {
+      entity_id: item.entity._id,
+      entity_name: item.entity.name,
+      domain: item.entity.canonical_domain,
+      description: item.entity.description,
+      tags: item.entity.tags,
+      revenue,
+      score: Math.round(item.score * 100) / 100,
+      source_count: item.sourceCount,
+      avg_confidence: Math.round(item.avgConfidence * 100) / 100,
+      signals: item.signals.map((s) => ({
+        type: s.signal_type,
+        value: s.value_text,
+        confidence: s.confidence,
+      })),
+      evidence: item.evidence.slice(0, 3).map((e) => ({
+        url: e.url,
+        snippet: e.snippet,
+        type: e.type,
+      })),
+    };
+  });
 
   const reportJson = { period_start: oneWeekAgo, period_end: now, items: reportItems };
   const reportHtml = buildReportHtml(reportJson);
@@ -136,6 +150,7 @@ function buildReportHtml(reportJson) {
           ${item.domain ? `<span class="domain">${esc(item.domain)}</span>` : ''}
           <span class="score">Score ${item.score}</span>
         </div>
+        ${item.revenue ? `<div class="revenue">Revenue: ${esc(item.revenue)}</div>` : ''}
         <p class="desc">${esc(item.description || 'No description')}</p>
         ${item.tags?.length ? `<div class="tags">${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join(' ')}</div>` : ''}
         <details open><summary>Signals</summary><ul>${signalsHtml || '<li>None</li>'}</ul></details>
@@ -163,6 +178,7 @@ header p{opacity:.8;font-size:.95rem}
 .card-hd h3{font-size:1.1rem;color:#1a1a2e}
 .domain{color:#666;font-size:.82rem}
 .score{background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:12px;font-size:.78rem;font-weight:600}
+.revenue{background:#fff3e0;color:#e65100;padding:4px 12px;border-radius:8px;font-size:.9rem;font-weight:700;margin-bottom:.6rem;display:inline-block}
 .desc{color:#555;margin-bottom:.6rem}
 .tags{margin-bottom:.6rem}
 .tag{display:inline-block;background:#e3f2fd;color:#1565c0;padding:2px 10px;border-radius:12px;font-size:.76rem;margin:2px}

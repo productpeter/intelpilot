@@ -1,15 +1,81 @@
-import { extractJson, extractMarkdown, SCHEMAS } from '../lib/tabstack.js';
+import { extractJson, extractMarkdown } from '../lib/tabstack.js';
 import { extractSignals, addTrendSignals } from '../lib/signals.js';
 import { uploadSnapshot, buildSnapshotKey } from '../lib/r2.js';
 import { resolveEntity } from './entities.js';
 import { col } from '../db/mongo.js';
 import config from '../config/index.js';
 
+const GENERIC_PAGE_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: {
+      type: 'string',
+      description: 'The main title or heading of the page',
+    },
+    entity_name: {
+      type: 'string',
+      description: 'The company or product name featured on this page',
+    },
+    domain: {
+      type: 'string',
+      description: 'The canonical domain of the company/product (e.g. example.com)',
+    },
+    description: {
+      type: 'string',
+      description: 'A short 1-2 sentence description of the company/product',
+    },
+    published_date: {
+      type: ['string', 'null'],
+      description: 'Publication or launch date if available (ISO 8601)',
+    },
+    snippets: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Key text snippets, prioritizing any mentions of revenue, MRR, ARR, earnings, profit, sales figures, growth metrics, and monetization. Also include pricing and customer count claims.',
+    },
+    pricing_text: {
+      type: ['string', 'null'],
+      description: 'Any pricing information mentioned on the page',
+    },
+    revenue_mentions: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'IMPORTANT: Extract ALL explicit revenue, MRR, ARR, income, profit, sales, or earnings figures. Include exact dollar amounts, growth claims (e.g. "$0 to $50k MRR"), and any monetization metrics. This is the highest priority field.',
+    },
+    customer_count_mentions: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Claims about number of customers or users (e.g. "500 customers", "10k users")',
+    },
+    relevant_links: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          label: { type: 'string' },
+          url: { type: 'string' },
+        },
+      },
+      description: 'Important links: pricing page, homepage, docs, GitHub repo',
+    },
+    tags: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Category or topic tags inferred from the content (e.g. AI, SaaS, Developer Tools)',
+    },
+  },
+  required: ['title'],
+};
+
 export async function processDiscovery(discovery, sourceDoc) {
   const url = discovery.candidate_url;
   console.log(`[Extractor] Processing: ${url}`);
 
-  const structured = await extractJson(url, SCHEMAS.genericPage, { nocache: true });
+  const structured = await extractJson(url, GENERIC_PAGE_SCHEMA, { nocache: true });
 
   let markdownContent = null;
   try {
