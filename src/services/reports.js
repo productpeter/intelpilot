@@ -17,7 +17,7 @@ export async function generateWeeklyReport() {
   const entities = await col('entities')
     .find({ updated_at: { $gte: oneWeekAgo } })
     .sort({ updated_at: -1 })
-    .limit(50)
+    .limit(200)
     .toArray();
 
   const scoredItems = [];

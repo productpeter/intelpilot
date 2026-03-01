@@ -75,14 +75,23 @@ export async function processDiscovery(discovery, sourceDoc) {
   const url = discovery.candidate_url;
   console.log(`[Extractor] Processing: ${url}`);
 
-  const structured = await extractJson(url, GENERIC_PAGE_SCHEMA, { nocache: true });
+  const hasSnippet = discovery.meta?.snippet;
+  const isRedditSelf = /reddit\.com\/r\//.test(url) && hasSnippet;
 
+  let structured;
   let markdownContent = null;
-  try {
-    const mdResult = await extractMarkdown(url);
-    markdownContent = mdResult.content || null;
-  } catch (err) {
-    console.warn(`[Extractor] Markdown extraction failed for ${url}:`, err.message);
+
+  if (isRedditSelf) {
+    structured = buildStructuredFromMeta(discovery);
+    markdownContent = `# ${discovery.title}\n\n${discovery.meta.snippet}`;
+  } else {
+    structured = await extractJson(url, GENERIC_PAGE_SCHEMA, { nocache: true });
+    try {
+      const mdResult = await extractMarkdown(url);
+      markdownContent = mdResult.content || null;
+    } catch (err) {
+      console.warn(`[Extractor] Markdown extraction failed for ${url}:`, err.message);
+    }
   }
 
   let r2Key = null;
@@ -180,6 +189,8 @@ function extractDomain(url) {
     const aggregators = [
       'producthunt.com',
       'news.ycombinator.com',
+      'reddit.com',
+      'old.reddit.com',
       'techcrunch.com',
       'tldr.tech',
     ];
@@ -193,9 +204,40 @@ function buildIdentifiers(url, structured) {
   const ids = {};
   if (/producthunt\.com/i.test(url)) ids.producthunt = url;
   if (/news\.ycombinator/i.test(url)) ids.hackernews = url;
+  if (/reddit\.com/i.test(url)) ids.reddit = url;
   for (const link of structured.relevant_links || []) {
     if (/github\.com/i.test(link.url)) ids.github = link.url;
     if (/twitter\.com|x\.com/i.test(link.url)) ids.twitter = link.url;
   }
   return ids;
+}
+
+function buildStructuredFromMeta(discovery) {
+  const m = discovery.meta || {};
+  const text = m.snippet || '';
+  const title = discovery.title || '';
+
+  let entityName = title.replace(/[\[\(].*?[\]\)]/g, '').trim();
+  if (entityName.length > 80) entityName = entityName.slice(0, 80);
+
+  let pseudoDomain = null;
+  try {
+    const parts = new URL(discovery.candidate_url).pathname.split('/');
+    const postId = parts.find((_, i) => parts[i - 1] === 'comments');
+    if (postId) pseudoDomain = `reddit-${postId}`;
+  } catch {}
+
+  return {
+    title,
+    entity_name: entityName || null,
+    domain: pseudoDomain,
+    description: text.slice(0, 200),
+    published_date: null,
+    snippets: text ? [text] : [],
+    pricing_text: null,
+    revenue_mentions: [],
+    customer_count_mentions: [],
+    relevant_links: [],
+    tags: m.tags || [],
+  };
 }
