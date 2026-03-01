@@ -2,6 +2,7 @@ import { extractJson, extractMarkdown } from '../lib/tabstack.js';
 import { extractSignals, addTrendSignals } from '../lib/signals.js';
 import { uploadSnapshot, buildSnapshotKey } from '../lib/r2.js';
 import { resolveEntity } from './entities.js';
+import { classifyEntity } from './classifier.js';
 import { col } from '../db/mongo.js';
 import config from '../config/index.js';
 
@@ -67,6 +68,11 @@ const GENERIC_PAGE_SCHEMA = {
       items: { type: 'string' },
       description:
         'Team or employee count (e.g. "solo founder", "team of 5", "2-person startup", "50 employees")',
+    },
+    product_website_url: {
+      type: ['string', 'null'],
+      description:
+        'The actual website URL of the product or startup being discussed (NOT the article/blog URL). For example, if an article on TechCrunch discusses a startup called "Acme AI" at acme.ai, the product_website_url is "https://acme.ai". Return null if not found.',
     },
     relevant_links: {
       type: 'array',
@@ -146,6 +152,8 @@ export async function processDiscovery(discovery, sourceDoc) {
   };
   const { insertedId: evidenceId } = await col('evidence').insertOne(evidence);
 
+  const productWebsite = resolveProductWebsite(structured, url);
+
   const entityCandidate = {
     name: structured.entity_name || structured.title || discovery.title,
     canonical_domain: structured.domain || extractDomain(url),
@@ -156,6 +164,7 @@ export async function processDiscovery(discovery, sourceDoc) {
       ...(discovery.meta?.tags || []),
     ],
     identifiers: buildIdentifiers(url, structured),
+    website_url: productWebsite,
   };
 
   const entity = await resolveEntity(entityCandidate);
@@ -192,9 +201,11 @@ export async function processDiscovery(discovery, sourceDoc) {
     { $set: { entity_id: entity._id, extraction_ref: rawPageId } },
   );
 
+  const classification = await classifyEntity(entity, mainSnippet);
+
   const totalSignals = signals.length + trendSignals.length;
   console.log(`[Extractor] Done: ${entityCandidate.name} (${totalSignals} signals)`);
-  return { entity, signals: [...signals, ...trendSignals], evidence };
+  return { entity, signals: [...signals, ...trendSignals], evidence, classification };
 }
 
 function inferEvidenceType(url, structured) {
@@ -204,21 +215,84 @@ function inferEvidenceType(url, structured) {
   return 'page';
 }
 
+const AGGREGATOR_DOMAINS = new Set([
+  'producthunt.com',
+  'news.ycombinator.com',
+  'reddit.com',
+  'old.reddit.com',
+  'techcrunch.com',
+  'tldr.tech',
+  'thenewstack.io',
+  'venturebeat.com',
+  'theverge.com',
+  'arstechnica.com',
+  'wired.com',
+  'medium.com',
+  'dev.to',
+  'hackernoon.com',
+  'betalist.com',
+  'ycombinator.com',
+  'crunchbase.com',
+  'linkedin.com',
+  'twitter.com',
+  'x.com',
+  'youtube.com',
+  'substack.com',
+  'github.com',
+  'gitlab.com',
+]);
+
+export function isAggregatorUrl(url) {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return AGGREGATOR_DOMAINS.has(hostname) ||
+      hostname.endsWith('.reddit.com') ||
+      hostname.endsWith('.medium.com') ||
+      hostname.endsWith('.substack.com');
+  } catch {
+    return false;
+  }
+}
+
 function extractDomain(url) {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, '');
-    const aggregators = [
-      'producthunt.com',
-      'news.ycombinator.com',
-      'reddit.com',
-      'old.reddit.com',
-      'techcrunch.com',
-      'tldr.tech',
-    ];
-    return aggregators.includes(hostname) ? null : hostname;
+    return AGGREGATOR_DOMAINS.has(hostname) ? null : hostname;
   } catch {
     return null;
   }
+}
+
+function resolveProductWebsite(structured, discoveryUrl) {
+  if (structured.product_website_url && !isAggregatorUrl(structured.product_website_url)) {
+    let url = structured.product_website_url;
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    return url;
+  }
+
+  const links = structured.relevant_links || [];
+  const homepageLabels = /^(homepage|website|home|official|visit|main site|product|app|try it|get started|landing)/i;
+  for (const link of links) {
+    if (link.url && homepageLabels.test(link.label) && !isAggregatorUrl(link.url)) {
+      let url = link.url;
+      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+      return url;
+    }
+  }
+
+  for (const link of links) {
+    if (link.url && !isAggregatorUrl(link.url) && !/github\.com|twitter\.com|x\.com/i.test(link.url)) {
+      let url = link.url;
+      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+      return url;
+    }
+  }
+
+  if (structured.domain && !isAggregatorUrl(`https://${structured.domain}`)) {
+    return `https://${structured.domain}`;
+  }
+
+  return null;
 }
 
 function buildIdentifiers(url, structured) {

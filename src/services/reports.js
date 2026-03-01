@@ -1,4 +1,6 @@
 import { col } from '../db/mongo.js';
+import { enrichEntities } from './enricher.js';
+import { isAggregatorUrl } from './extractor.js';
 
 const SIGNAL_WEIGHTS = {
   revenue_claim: 25,
@@ -12,24 +14,7 @@ const SIGNAL_WEIGHTS = {
   trend_indicator: 1,
 };
 
-const BLOCKED_DOMAINS = new Set([
-  'reuters.com', 'sciencedaily.com', 'nytimes.com', 'bbc.com', 'cnn.com',
-  'theguardian.com', 'washingtonpost.com', 'techcrunch.com', 'theverge.com',
-  'arstechnica.com', 'wired.com', 'bloomberg.com', 'forbes.com',
-  'github.com', 'gitlab.com', 'wikipedia.org',
-  'redis.io', 'openai.com', 'google.com', 'microsoft.com', 'apple.com',
-  'amazon.com', 'meta.com', 'anthropic.com', 'nvidia.com', 'x.com',
-  'twitter.com', 'facebook.com', 'instagram.com', 'youtube.com',
-  'linkedin.com', 'medium.com', 'substack.com', 'xcancel.com',
-]);
 
-const BLOCKED_NAMES = /^(openai|google|microsoft|apple|amazon|meta|anthropic|nvidia|redis|claude|chatgpt|twitter|facebook|instagram|youtube)$/i;
-
-function isStartupEntity(entity) {
-  if (entity.canonical_domain && BLOCKED_DOMAINS.has(entity.canonical_domain)) return false;
-  if (BLOCKED_NAMES.test(entity.name)) return false;
-  return true;
-}
 
 export async function generateWeeklyReport() {
   const now = new Date();
@@ -37,12 +22,15 @@ export async function generateWeeklyReport() {
 
   console.log('[Reports] Generating weekly report…');
 
-  const entities = (await col('entities')
-    .find({ updated_at: { $gte: oneWeekAgo } })
+  const entities = await col('entities')
+    .find({
+      updated_at: { $gte: oneWeekAgo },
+      'classification.is_startup': true,
+      'classification.clean_name': { $ne: null },
+    })
     .sort({ updated_at: -1 })
     .limit(200)
-    .toArray())
-    .filter(isStartupEntity);
+    .toArray();
 
   const scoredItems = [];
 
@@ -73,6 +61,15 @@ export async function generateWeeklyReport() {
       ? signals.reduce((sum, s) => sum + s.confidence, 0) / signals.length
       : 0;
 
+    const hasRealDomain = entity.canonical_domain && !entity.canonical_domain.startsWith('reddit-');
+    const hasWebsite = !!entity.website_url;
+    const webVerified = entity.enrichment?.web_verified === true;
+    const enrichedButEmpty = entity.enrichment && !webVerified;
+
+    if (enrichedButEmpty && !hasWebsite && !hasRealDomain) {
+      score *= 0.1;
+    }
+
     scoredItems.push({ entity, signals, evidence: evidenceDocs, score, sourceCount, avgConfidence, hasRevenue });
   }
 
@@ -80,7 +77,19 @@ export async function generateWeeklyReport() {
     if (a.hasRevenue !== b.hasRevenue) return a.hasRevenue ? -1 : 1;
     return b.score - a.score;
   });
-  const topItems = scoredItems.slice(0, 30);
+
+  const toEnrich = scoredItems
+    .filter((item) => !item.entity.enrichment)
+    .map((item) => item.entity);
+
+  if (toEnrich.length > 0) {
+    console.log(`[Reports] Kicking off background enrichment for ${toEnrich.length} entities…`);
+    enrichEntities(toEnrich).catch((err) =>
+      console.error('[Reports] Background enrichment error:', err.message),
+    );
+  }
+
+  const topItems = scoredItems.slice(0, 50);
 
   const reportItems = topItems.map((item) => {
     const pick = (type) => {
@@ -88,17 +97,23 @@ export async function generateWeeklyReport() {
       return found.length ? [...new Set(found.map((s) => s.value_text))].join('; ') : null;
     };
 
+    const em = item.entity.enrichment?.metrics;
+    const category = item.entity.classification?.category;
+
     return {
       entity_id: item.entity._id,
       entity_name: item.entity.name,
       domain: item.entity.canonical_domain,
       description: item.entity.description,
       tags: item.entity.tags,
-      revenue: pick('revenue_claim'),
-      funding: pick('funding_raised'),
-      growth: pick('growth_rate'),
-      users: pick('user_count') || pick('customer_count_claim'),
-      team: pick('team_size'),
+      category,
+      revenue: pick('revenue_claim') || em?.revenue,
+      funding: pick('funding_raised') || em?.funding,
+      growth: pick('growth_rate') || em?.growth,
+      users: pick('user_count') || pick('customer_count_claim') || em?.user_count,
+      team: pick('team_size') || em?.team_size,
+      notable: em?.notable || null,
+      website: resolveReportWebsite(item.entity, em, item.evidence),
       score: Math.round(item.score * 100) / 100,
       source_count: item.sourceCount,
       avg_confidence: Math.round(item.avgConfidence * 100) / 100,
@@ -144,6 +159,30 @@ export async function generateWeeklyReport() {
   return report;
 }
 
+function resolveReportWebsite(entity, enrichmentMetrics, evidenceDocs) {
+  const candidates = [
+    entity.website_url,
+    enrichmentMetrics?.website,
+    entity.canonical_domain && !entity.canonical_domain.startsWith('reddit-')
+      ? `https://${entity.canonical_domain}`
+      : null,
+  ];
+
+  for (const url of candidates) {
+    if (url && !isAggregatorUrl(url.startsWith('http') ? url : `https://${url}`)) {
+      return url.startsWith('http') ? url : `https://${url}`;
+    }
+  }
+
+  for (const ev of evidenceDocs || []) {
+    if (ev.url && !isAggregatorUrl(ev.url)) {
+      return ev.url;
+    }
+  }
+
+  return null;
+}
+
 // ── HTML builder ────────────────────────────────────────────────────
 
 function buildReportHtml(reportJson) {
@@ -171,13 +210,18 @@ function buildReportHtml(reportJson) {
         )
         .join('');
 
+      const websiteUrl = item.website && !item.website.startsWith('reddit-')
+        ? (item.website.startsWith('http') ? item.website : `https://${item.website}`)
+        : null;
+
       return `
       <div class="card">
         <div class="card-hd">
-          <h3>${i + 1}. ${esc(item.entity_name)}</h3>
-          ${item.domain ? `<span class="domain">${esc(item.domain)}</span>` : ''}
+          <h3>${i + 1}. ${websiteUrl ? `<a href="${esc(websiteUrl)}" target="_blank">${esc(item.entity_name)}</a>` : esc(item.entity_name)}</h3>
+          ${item.category ? `<span class="category">${esc(item.category)}</span>` : ''}
           <span class="score">Score ${item.score}</span>
         </div>
+        ${websiteUrl ? `<div class="website"><a href="${esc(websiteUrl)}" target="_blank">${esc(websiteUrl)}</a></div>` : ''}
         <div class="badges">
         ${item.revenue ? `<span class="badge revenue">Revenue: ${esc(item.revenue)}</span>` : ''}
         ${item.funding ? `<span class="badge funding">Funding: ${esc(item.funding)}</span>` : ''}
@@ -186,6 +230,7 @@ function buildReportHtml(reportJson) {
         ${item.team ? `<span class="badge team">Team: ${esc(item.team)}</span>` : ''}
         </div>
         <p class="desc">${esc(item.description || 'No description')}</p>
+        ${item.notable ? `<p class="notable">${esc(item.notable)}</p>` : ''}
         ${item.tags?.length ? `<div class="tags">${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join(' ')}</div>` : ''}
         <details><summary>Signals</summary><ul>${signalsHtml || '<li>None</li>'}</ul></details>
         <details><summary>Evidence</summary><ul>${evidenceHtml || '<li>None</li>'}</ul></details>
@@ -212,6 +257,9 @@ header p{opacity:.8;font-size:.95rem}
 .card-hd h3{font-size:1.1rem;color:#1a1a2e}
 .domain{color:#666;font-size:.82rem}
 .score{background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:12px;font-size:.78rem;font-weight:600}
+.category{background:#ede7f6;color:#4527a0;padding:2px 8px;border-radius:12px;font-size:.76rem;font-weight:500}
+.website{margin-bottom:.5rem}.website a{color:#1976d2;font-size:.84rem}
+.notable{color:#666;font-size:.85rem;font-style:italic;margin-bottom:.6rem}
 .badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.6rem}
 .badge{padding:4px 12px;border-radius:8px;font-size:.82rem;font-weight:600;display:inline-block}
 .revenue{background:#fff3e0;color:#e65100}
@@ -248,5 +296,6 @@ footer{text-align:center;color:#aaa;font-size:.82rem;margin-top:2rem}
 
 function esc(s) {
   if (!s) return '';
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const str = typeof s === 'string' ? s : String(s);
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

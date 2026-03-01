@@ -1,13 +1,13 @@
 # IntelPilot
 
-Agentic research system that continuously monitors the web for external signals (new companies, traction indicators, pricing changes, market trends) and produces **evidence-backed weekly intelligence reports**.
+Agentic research system that continuously monitors the web for **AI startup signals** — new companies, traction indicators, funding, team size, user counts — and produces **evidence-backed weekly intelligence reports** enriched with deep-web research.
 
 ---
 
 ## Table of Contents
 
 - [Product Goal](#product-goal)
-- [MVP Scope](#mvp-scope)
+- [How It Works](#how-it-works)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Setup](#setup)
@@ -16,42 +16,34 @@ Agentic research system that continuously monitors the web for external signals 
 - [Running](#running)
 - [API Reference](#api-reference)
 - [Sources](#sources)
-- [Architecture & Data Flow](#architecture--data-flow)
+- [Pipeline Architecture](#pipeline-architecture)
+- [LLM Classification](#llm-classification)
+- [Research Enrichment](#research-enrichment)
 - [Data Model (MongoDB Collections)](#data-model-mongodb-collections)
 - [Signal Extraction](#signal-extraction)
 - [Entity Deduplication](#entity-deduplication)
 - [Report Generation](#report-generation)
 - [Cron Schedules](#cron-schedules)
-- [Acceptance Criteria](#acceptance-criteria)
 
 ---
 
 ## Product Goal
 
-Build an agentic research system that continuously monitors the web for user-relevant external signals and produces evidence-backed weekly intelligence reports. This MVP covers **research + report generation** only — no email/notifications.
+Build an agentic research system that continuously monitors the web for new **AI startups and products**, classifies them using LLMs, enriches top entries with deep-web research, and produces ranked weekly intelligence reports with verified data and website URLs.
+
+This MVP covers **discovery + classification + enrichment + report generation**. No email/notifications.
 
 ---
 
-## MVP Scope
+## How It Works
 
-### In Scope
-
-- Continuous scanning of **4 sources** (Product Hunt, Hacker News Show HN, RSS feeds, Reddit r/SaaS)
-- **Tabstack API** for web browsing + structured data extraction
-- **MongoDB Atlas** as primary database for raw + structured artifacts
-- **MongoDB Atlas Vector Search** for embeddings + similarity-based entity dedup
-- Basic dedup/entity resolution (domain/name match + vector similarity)
-- Weekly report generation (HTML + JSON, viewable via endpoint)
-- **Cloudflare R2** for optional HTML/markdown snapshots
-- Concurrent scanning across sources with batched extractions
-
-### Out of Scope (MVP)
-
-- Email delivery / Slack alerts / push notifications
-- User-configurable source UI (sources are hardcoded)
-- Full auth/multi-tenant system (single admin token)
-- Complex enrichment (funding databases, paid APIs)
-- Perfect revenue verification (stores "claims" with evidence)
+1. **Scan** — Fetches candidates from 9 sources (Product Hunt, Hacker News, RSS feeds, 5 Reddit subreddits, BetaList)
+2. **Extract** — Uses Tabstack API to pull structured data from each candidate URL
+3. **Classify** — OpenAI `gpt-4o-mini` classifies each entity: is it an AI startup with an identifiable product name?
+4. **Deduplicate** — Three-tier entity resolution (domain match → name match → vector similarity via Atlas Vector Search)
+5. **Enrich** — Top entities are researched via Tabstack `/research` endpoint, then metrics are extracted with GPT
+6. **Verify** — Entities enriched but with no web presence (no website, no data found) are heavily penalized
+7. **Report** — Scored and ranked into an HTML + JSON report with website URLs, revenue, funding, users, and team size
 
 ---
 
@@ -63,8 +55,9 @@ Build an agentic research system that continuously monitors the web for user-rel
 | API | Express.js |
 | Database | MongoDB Atlas |
 | Vector Search | MongoDB Atlas Vector Search (cosine, 3072 dims) |
-| Web Extraction | Tabstack API (`/v1/extract/json`, `/v1/extract/markdown`) |
+| Web Extraction | Tabstack API (`/v1/extract/json`, `/v1/extract/markdown`, `/v1/research`) |
 | Embeddings | OpenAI `text-embedding-3-large` (3072 dimensions) |
+| LLM Classification | OpenAI `gpt-4o-mini` (entity classification + metric extraction) |
 | Object Storage | Cloudflare R2 via `@aws-sdk/client-s3` |
 | Scheduling | `node-cron` |
 
@@ -87,7 +80,8 @@ src/
 ├── db/
 │   └── mongo.js             # MongoDB connection, collection helper, indexes
 ├── lib/
-│   ├── tabstack.js          # Tabstack REST client + extraction schemas
+│   ├── tabstack.js          # Tabstack client (extract JSON, markdown, research SSE)
+│   ├── openai.js            # OpenAI chat completions client (classify + extract)
 │   ├── embeddings.js        # OpenAI embeddings with retry/backoff
 │   ├── r2.js                # Cloudflare R2 snapshot storage
 │   └── signals.js           # Regex-based signal extraction heuristics
@@ -96,12 +90,15 @@ src/
 │   ├── producthunt.js       # Product Hunt daily leaderboard
 │   ├── hackernews.js        # Hacker News Show HN (Firebase API)
 │   ├── rss.js               # TLDR AI + HN Newest feeds
-│   └── reddit.js            # Reddit r/SaaS hot posts
+│   ├── reddit.js            # Multi-subreddit (SaaS, startups, indiehackers, artificial, LocalLLaMA)
+│   └── betalist.js          # BetaList new startups (via Tabstack extract)
 ├── services/
 │   ├── scanner.js           # Concurrent scan orchestration
-│   ├── extractor.js         # Tabstack extraction pipeline
+│   ├── extractor.js         # Tabstack extraction + classifier integration
+│   ├── classifier.js        # LLM startup classification (gpt-4o-mini)
+│   ├── enricher.js          # Tabstack /research enrichment pipeline
 │   ├── entities.js          # Entity resolution + vector dedup
-│   └── reports.js           # Weekly report generation + scoring
+│   └── reports.js           # Report generation, scoring, HTML rendering
 ├── routes/
 │   ├── index.js             # Route aggregator
 │   ├── health.js            # GET /api/health
@@ -140,7 +137,7 @@ cp .env.example .env
 | `MONGODB_DB` | No | Database name (default: `intelpilot`) |
 | `TABSTACK_API_KEY` | **Yes** | Tabstack API key from [console.tabstack.ai](https://console.tabstack.ai) |
 | `TABSTACK_BASE_URL` | No | Tabstack API base URL (default: `https://api.tabstack.ai`) |
-| `OPENAI_API_KEY` | **Yes** | OpenAI API key for embeddings |
+| `OPENAI_API_KEY` | **Yes** | OpenAI API key (used for embeddings + gpt-4o-mini classification/extraction) |
 | `OPENAI_EMBEDDING_MODEL` | No | Embedding model (default: `text-embedding-3-large`) |
 | `OPENAI_EMBEDDING_DIM` | No | Vector dimensions (default: `3072`) |
 | `SCAN_CRON` | No | Scan schedule (default: `*/30 * * * *` = every 30 min) |
@@ -204,9 +201,9 @@ The server connects to MongoDB, ensures indexes, starts cron jobs, and listens o
 | Endpoint | Method | Description |
 | --- | --- | --- |
 | `/api/health` | GET | Health check (server + DB status) |
-| `/api/reports/latest` | GET | Latest report as JSON (add `?format=html` for HTML) |
+| `/api/reports/latest` | GET | Latest report (HTML in browser, JSON for API clients) |
 | `/api/reports` | GET | List all reports (metadata only) |
-| `/api/entities` | GET | List entities. Query params: `?sort=`, `?order=`, `?limit=`, `?skip=`, `?tag=` |
+| `/api/entities` | GET | List entities. Query: `?sort=`, `?order=`, `?limit=`, `?skip=`, `?tag=` |
 | `/api/entities/:id` | GET | Entity detail with signals + evidence |
 | `/report` | GET | Latest report rendered as a standalone HTML page |
 
@@ -217,76 +214,107 @@ Require `Authorization: Bearer <ADMIN_TOKEN>` header (skipped in dev if token is
 | Endpoint | Method | Description |
 | --- | --- | --- |
 | `/api/admin/scan/run` | POST | Trigger a full scan (returns immediately, runs in background) |
-| `/api/admin/report/generate` | POST | Generate a weekly report now |
+| `/api/admin/report/generate` | POST | Generate a report now (kicks off enrichment in background) |
+| `/api/admin/enrich` | POST | Manually trigger enrichment. Query: `?limit=15` |
 
 ---
 
 ## Sources
 
-| # | Source | Method | What it extracts |
+| # | Source | Method | What it finds |
 | --- | --- | --- | --- |
 | 1 | **Product Hunt** | Tabstack JSON extraction on daily leaderboard | Product names, taglines, upvotes, websites, topics |
 | 2 | **Hacker News Show HN** | HN Firebase API (top 20 stories) | Titles, URLs, points, authors, comment counts |
 | 3 | **RSS Feeds** | Tabstack JSON extraction (TLDR AI, HN Newest) | Article titles, URLs, summaries, authors, dates, tags |
-| 4 | **Reddit r/SaaS** | Tabstack JSON extraction on hot posts | Titles, URLs, upvotes, comments, flairs, snippets |
+| 4 | **Reddit** (5 subreddits) | Reddit JSON API (no Tabstack needed) | r/SaaS, r/startups, r/indiehackers, r/artificial, r/LocalLLaMA |
+| 5 | **BetaList** | Tabstack JSON extraction on betalist.com/startups | Startup names, taglines, tags, URLs |
 
-Sources run **concurrently** during scans. Within each source, extractions run in batches of 3.
+Reddit fetches from all 5 subreddits in parallel using the public JSON API. Reddit self-posts are processed directly from their content without Tabstack to avoid Reddit bot detection.
 
 ---
 
-## Architecture & Data Flow
+## Pipeline Architecture
 
 ```
-┌─────────────┐
-│ Cron / API  │  (every 30min or POST /admin/scan/run)
-└──────┬──────┘
-       │
-       ▼
-┌─────────────────────────────────────────┐
-│           Scanner (concurrent)          │
-│  Product Hunt │ HN │ RSS │ Reddit       │
-└──────┬────────┴──┬─┴───┬─┴───┬──────────┘
-       │           │     │     │
-       ▼           ▼     ▼     ▼
-┌─────────────────────────────────────────┐
-│        Candidate URLs discovered        │
-│          (deduplicated by URL)          │
-└──────────────────┬──────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────┐
-│       Extractor (per candidate URL)     │
-│                                         │
-│  1. Tabstack /extract/json (structured) │
-│  2. Tabstack /extract/markdown (text)   │
-│  3. Upload snapshot to R2 (optional)    │
-│  4. Store raw_page + evidence           │
-│  5. Resolve entity (dedup)              │
-│  6. Extract signals (regex heuristics)  │
-│  7. Store signals linked to entity      │
-└──────────────────┬──────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────┐
-│        Entity Resolution (dedup)        │
-│                                         │
-│  1. Exact domain match                  │
-│  2. Case-insensitive name match         │
-│  3. Atlas Vector Search (cosine ≥ 0.85) │
-│  4. Create new entity if no match       │
-└──────────────────┬──────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────┐
-│      Report Generation (weekly cron)    │
-│                                         │
-│  1. Pull entities updated this week     │
-│  2. Score by signal weights + recency   │
-│  3. Rank top 30 entities                │
-│  4. Generate HTML + JSON report         │
-│  5. Store in reports collection         │
-└─────────────────────────────────────────┘
+Sources (9 channels)
+    │
+    ▼
+┌─────────────────────────────────────────────────┐
+│  Scanner (concurrent across all sources)        │
+│  Product Hunt │ HN │ RSS │ 5x Reddit │ BetaList │
+└────────────────────┬────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────┐
+│  Extractor (batched, 5 concurrent)              │
+│                                                 │
+│  1. Tabstack /extract/json (structured data)    │
+│  2. Tabstack /extract/markdown (full text)      │
+│  3. Upload snapshot to R2 (optional)            │
+│  4. Store raw_page + evidence                   │
+│  5. Resolve entity (3-tier dedup)               │
+│  6. Extract signals (regex heuristics)          │
+│  7. LLM Classification (gpt-4o-mini)            │
+│     → is_startup, clean_name, category,         │
+│       one_liner, website_url                    │
+└────────────────────┬────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────┐
+│  Report Generation                              │
+│                                                 │
+│  1. Filter: classification.is_startup = true    │
+│     AND classification.clean_name != null       │
+│  2. Score by signal weights + recency           │
+│  3. Research Enrichment (all report entries)    │
+│     → Tabstack /research SSE endpoint           │
+│     → GPT extracts: revenue, funding, users,    │
+│       team size, website URL, growth, founded   │
+│  4. Verification penalty (no web presence → 10%)│
+│  5. Rank top 30, build HTML + JSON report       │
+└─────────────────────────────────────────────────┘
 ```
+
+---
+
+## LLM Classification
+
+Every entity is classified by OpenAI `gpt-4o-mini` after extraction. The classifier determines:
+
+| Field | Description |
+| --- | --- |
+| `is_startup` | `true` only for AI/ML startups and products with identifiable names |
+| `confidence` | 0–1 classification confidence |
+| `clean_name` | Actual product name (1-4 words, not a Reddit title or headline) |
+| `one_liner` | Concise description of what the product does |
+| `category` | AI sub-category (e.g. AI Agent, LLM Tool, AI SaaS, AI Healthcare) |
+| `website_url` | Product website extracted from evidence (if available) |
+
+**Filtered out:** non-AI startups, news articles, opinion pieces, questions, big tech (Google, OpenAI, etc.), portfolio sites, agencies, consulting firms, unnamed projects.
+
+**Name validation:** names longer than 40 characters or more than 5 words are rejected (entity marked as not a startup).
+
+Cost: ~$0.001 per classification with gpt-4o-mini.
+
+---
+
+## Research Enrichment
+
+Top-ranked AI startups are enriched via Tabstack's `/research` SSE endpoint for deeper, verified data.
+
+**Pipeline:**
+1. Tabstack `/research` searches the web for the startup (asking specifically for website URL, revenue, funding, team size, users, growth)
+2. The research report (streamed via SSE) is fed to `gpt-4o-mini` to extract structured metrics
+3. Extracted data is stored on the entity and new signals are created
+4. A `web_verified` flag is set — if research found real data, the entity is verified; if all metrics are null, it's unverified
+
+**Verification penalty:** entities that were enriched but have no web presence (no website URL, no real domain, and research found nothing) get their score reduced to 10%.
+
+**Enrichment runs:**
+- Automatically (background) when a report is generated — top 15 unenriched entities
+- Manually via `POST /api/admin/enrich?limit=15`
+
+Cost: ~1 Tabstack credit per `/research` call.
 
 ---
 
@@ -315,7 +343,7 @@ Sources run **concurrently** during scans. Within each source, extractions run i
 | `source_id` | ObjectId | Source that found this |
 | `candidate_url` | string | Discovered URL |
 | `title` | string | Page/post title |
-| `meta` | object | Source-specific metadata |
+| `meta` | object | Source-specific metadata (subreddit, upvotes, snippet, etc.) |
 | `discovered_at` | Date | When discovered |
 | `status` | string | `queued`, `extracted`, `failed` |
 | `entity_id` | ObjectId | Resolved entity (nullable) |
@@ -334,11 +362,14 @@ Sources run **concurrently** during scans. Within each source, extractions run i
 ### `entities`
 | Field | Type | Description |
 | --- | --- | --- |
-| `name` | string | Company/product name |
+| `name` | string | Company/product name (cleaned by LLM classifier) |
 | `canonical_domain` | string | Primary domain (nullable) |
-| `description` | string | Short description |
+| `description` | string | Short description (set by classifier or enricher) |
 | `tags` | string[] | Category tags |
-| `identifiers` | object | `{ github, twitter, producthunt, hackernews }` |
+| `identifiers` | object | `{ github, twitter, producthunt, hackernews, reddit }` |
+| `website_url` | string | Actual product website URL (nullable) |
+| `classification` | object | LLM classification result (see [LLM Classification](#llm-classification)) |
+| `enrichment` | object | Research enrichment data: `{ research_text, metrics, web_verified, enriched_at }` |
 | `created_at` | Date | Creation time |
 | `updated_at` | Date | Last update time |
 | `embedding` | number[] | 3072-dim vector (nullable) |
@@ -367,6 +398,7 @@ Sources run **concurrently** during scans. Within each source, extractions run i
 | `evidence_id` | ObjectId | Supporting evidence record |
 | `source_id` | ObjectId | Source that produced this |
 | `captured_at` | Date | When captured |
+| `enriched` | boolean | `true` if signal came from research enrichment |
 
 ### `reports`
 | Field | Type | Description |
@@ -383,17 +415,21 @@ Sources run **concurrently** during scans. Within each source, extractions run i
 
 ## Signal Extraction
 
-Signals are extracted from page content using regex heuristics:
+Signals are extracted from page content using regex heuristics, then enriched via Tabstack research + GPT:
 
-| Signal Type | What it detects | Example matches | Confidence |
+| Signal Type | What it detects | Example matches | Weight |
 | --- | --- | --- | --- |
-| `revenue_claim` | MRR/ARR/revenue mentions | `$50k MRR`, `revenue of $1.2M` | 0.75–0.85 |
-| `customer_count_claim` | User/customer count claims | `500 customers`, `10k users` | 0.75–0.80 |
-| `pricing_present` | Pricing information | `$29/mo`, `Enterprise plan`, `Free tier` | 0.70–0.90 |
-| `launch_announcement` | New product launches | `just launched`, `Show HN:`, `now available` | 0.80–0.90 |
-| `trend_indicator` | Topic/category tags from content | Tags inferred by Tabstack | 0.60 |
+| `revenue_claim` | MRR/ARR/revenue mentions | `$50k MRR`, `revenue of $1.2M` | 25 |
+| `funding_raised` | Funding rounds, investors | `raised $2M seed`, `YC W24`, `bootstrapped` | 20 |
+| `growth_rate` | Growth metrics | `grew 30% MoM`, `doubled in 3 months` | 15 |
+| `customer_count_claim` | Customer/user counts | `500 customers`, `10k users` | 10 |
+| `user_count` | DAU/MAU/downloads/signups | `50K DAU`, `1M downloads`, `waitlist of 5K` | 10 |
+| `pricing_present` | Pricing information | `$29/mo`, `Enterprise plan`, `Free tier` | 7 |
+| `team_size` | Team/employee count | `solo founder`, `team of 5`, `50 employees` | 5 |
+| `launch_announcement` | New product launches | `just launched`, `Show HN:`, `now available` | 4 |
+| `trend_indicator` | Topic/category tags | Tags inferred by Tabstack | 1 |
 
-Each signal includes `value_text`, optional `value_num`/`unit`, `confidence`, and a reference to the evidence record.
+Revenue-bearing entities receive a +100 score bonus and are always sorted first.
 
 ---
 
@@ -410,40 +446,38 @@ Three-tier dedup strategy (checked in order):
    - **≥ 0.70:** log as possible duplicate (no auto-merge)
    - **< 0.70:** create new entity
 
-Embeddings use retry with exponential backoff (up to 5 retries) to handle OpenAI rate limits.
+Reddit self-posts use pseudo-domains (e.g. `reddit-postId`) to ensure each post is treated as a distinct entity.
 
 ---
 
 ## Report Generation
 
-Weekly reports are generated on schedule (`0 9 * * 1` = Monday 9am) or on demand via `POST /api/admin/report/generate`.
+Reports are generated on schedule (`0 9 * * 1` = Monday 9am) or on demand via `POST /api/admin/report/generate`.
+
+### Report item fields
+
+Each report entry includes:
+- Entity name (clickable link to product website)
+- AI category badge
+- Website URL
+- Metric badges: Revenue, Funding, Users, Growth, Team Size
+- Notable facts (YC batch, awards, notable customers)
+- Short description
+- Tags
+- Collapsible Signals and Evidence sections
+- Source count + average confidence
 
 ### Scoring formula
 
-Each entity is scored by:
-
-| Factor | Weight |
+| Factor | Effect |
 | --- | --- |
-| `revenue_claim` signal | ×10 |
-| `customer_count_claim` signal | ×8 |
-| `pricing_present` signal | ×7 |
-| `launch_announcement` signal | ×5 |
-| `trend_indicator` signal | ×2 |
+| Signal weights | Each signal × confidence × weight (see table above) |
+| Revenue bonus | +100 if any `revenue_claim` signal exists |
 | Multi-source mentions | +3 per unique source |
-| Recency bonus | +0 to +7 (days since update) |
+| Recency | +0 to +7 based on days since last update |
+| Verification penalty | ×0.1 if enriched but no web presence found |
 
-All signal scores are multiplied by their confidence. Top 30 entities by score are included.
-
-### Report item format
-
-Each report entry includes:
-- Entity name + domain
-- Short description
-- Key signals (bulleted with confidence %)
-- Evidence links (up to 3 per entity)
-- Source count + average confidence
-
-Reports are stored as both `report_json` (structured) and `report_html` (styled, self-contained HTML page).
+Top 30 entities by score are included. Reports are stored as both `report_json` (structured) and `report_html` (styled, self-contained HTML page).
 
 ---
 
@@ -453,17 +487,3 @@ Reports are stored as both `report_json` (structured) and `report_html` (styled,
 | --- | --- | --- |
 | Source scanning | Every 30 minutes | `SCAN_CRON` |
 | Weekly report | Monday 9:00 AM | `WEEKLY_REPORT_CRON` |
-
----
-
-## Acceptance Criteria
-
-- [x] Scans at least 3 sources on a schedule
-- [x] Uses Tabstack to extract structured content for each discovery
-- [x] Stores discoveries/signals/evidence in MongoDB Atlas
-- [x] Uses Atlas Vector Search for top-k similar entity dedup
-- [x] Generates weekly reports with entity rankings
-- [x] Each report entry contains at least one evidence link + snippet
-- [x] Latest report viewable via `/report` endpoint
-- [x] Concurrent scanning across sources
-- [x] Retry with backoff for OpenAI rate limits

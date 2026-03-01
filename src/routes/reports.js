@@ -10,7 +10,8 @@ router.get('/latest', async (req, res) => {
     return res.status(404).json({ error: 'No reports generated yet' });
   }
 
-  if (req.query.format === 'html') {
+  const wantsHtml = req.query.format === 'html' || req.accepts('html') === 'html';
+  if (wantsHtml) {
     return res.type('html').send(report.report_html);
   }
 
