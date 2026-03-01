@@ -271,7 +271,7 @@ Sources (~500 candidates per scan)
 │     → Tabstack /research SSE endpoint                        │
 │     → GPT extracts: revenue, funding, users, team size,      │
 │       website URL, growth, founded year, domain status       │
-│     → Name-match validation (Levenshtein ≥ 0.7)             │
+│     → Name-match validation (Levenshtein ≥ 0.7)              │
 │     → Research URL always preferred over extraction URL      │
 │     → Dead/parked domain auto-delist                         │
 │  4. Exclude entities with no discoverable website            │
