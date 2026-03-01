@@ -238,19 +238,19 @@ Sources run **concurrently** during scans. Within each source, extractions run i
 
 ```
 ┌─────────────┐
-│  Cron / API  │  (every 30min or POST /admin/scan/run)
+│ Cron / API  │  (every 30min or POST /admin/scan/run)
 └──────┬──────┘
        │
        ▼
 ┌─────────────────────────────────────────┐
-│           Scanner (concurrent)           │
-│  Product Hunt │ HN │ RSS │ Reddit        │
+│           Scanner (concurrent)          │
+│  Product Hunt │ HN │ RSS │ Reddit       │
 └──────┬────────┴──┬──┴──┬──┴──┬──────────┘
        │           │     │     │
        ▼           ▼     ▼     ▼
 ┌─────────────────────────────────────────┐
-│         Candidate URLs discovered        │
-│         (deduplicated by URL)            │
+│        Candidate URLs discovered        │
+│          (deduplicated by URL)          │
 └──────────────────┬──────────────────────┘
                    │
                    ▼
@@ -268,23 +268,23 @@ Sources run **concurrently** during scans. Within each source, extractions run i
                    │
                    ▼
 ┌─────────────────────────────────────────┐
-│        Entity Resolution (dedup)         │
-│                                          │
-│  1. Exact domain match                   │
-│  2. Case-insensitive name match          │
-│  3. Atlas Vector Search (cosine ≥ 0.85)  │
-│  4. Create new entity if no match        │
+│        Entity Resolution (dedup)        │
+│                                         │
+│  1. Exact domain match                  │
+│  2. Case-insensitive name match         │
+│  3. Atlas Vector Search (cosine ≥ 0.85) │
+│  4. Create new entity if no match       │
 └──────────────────┬──────────────────────┘
                    │
                    ▼
 ┌─────────────────────────────────────────┐
-│      Report Generation (weekly cron)     │
-│                                          │
-│  1. Pull entities updated this week      │
-│  2. Score by signal weights + recency    │
-│  3. Rank top 30 entities                 │
-│  4. Generate HTML + JSON report          │
-│  5. Store in reports collection           │
+│      Report Generation (weekly cron)    │
+│                                         │
+│  1. Pull entities updated this week     │
+│  2. Score by signal weights + recency   │
+│  3. Rank top 30 entities                │
+│  4. Generate HTML + JSON report         │
+│  5. Store in reports collection         │
 └─────────────────────────────────────────┘
 ```
 
