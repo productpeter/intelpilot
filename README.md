@@ -24,6 +24,8 @@ Agentic research system that continuously monitors the web for **AI startup sign
 - [Entity Deduplication](#entity-deduplication)
 - [Report Generation](#report-generation)
 - [Cron Schedules](#cron-schedules)
+- [Frontend Dashboard](#frontend-dashboard)
+- [Deployment (Railway)](#deployment-railway)
 
 ---
 
@@ -53,17 +55,19 @@ This MVP covers **discovery + classification + enrichment + report generation**.
 | --- | --- |
 | Runtime | Node.js 20+ (ES Modules) |
 | API | Express.js |
-| Database | MongoDB Atlas |
+| Database | MongoDB Atlas (Flex) |
 | Vector Search | MongoDB Atlas Vector Search (cosine, 3072 dims) |
 | Web Extraction | Tabstack API (`/v1/extract/json`, `/v1/extract/markdown`, `/v1/research`) |
 | Embeddings | OpenAI `text-embedding-3-large` (3072 dimensions) |
 | LLM Classification | OpenAI `gpt-4o-mini` (entity classification + metric extraction) |
 | Object Storage | Cloudflare R2 via `@aws-sdk/client-s3` |
 | Scheduling | `node-cron` |
+| Frontend | Embedded static HTML/CSS/JS dashboard (no build step) |
+| Hosting | Railway (auto-deploy from GitHub) |
 
 ### Dependencies
 
-**Runtime:** `express`, `dotenv`, `axios`, `mongodb`, `node-cron`, `@aws-sdk/client-s3`, `cors`, `helmet`, `morgan`
+**Runtime:** `express`, `dotenv`, `axios`, `mongodb`, `node-cron`, `@aws-sdk/client-s3`, `cors`, `helmet`, `morgan`, `compression`
 
 **Dev:** `nodemon`
 
@@ -74,7 +78,11 @@ This MVP covers **discovery + classification + enrichment + report generation**.
 ```
 src/
 ├── index.js                 # Server entry point
-├── app.js                   # Express app (middleware, routes, /report page)
+├── app.js                   # Express app (middleware, static files, routes, /report page)
+├── public/
+│   ├── index.html           # Dashboard UI (actions, status, report history, tech stack)
+│   ├── style.css            # Dashboard styles (dark header, cards, responsive grid)
+│   └── app.js               # Frontend logic (API calls, polling, status updates)
 ├── config/
 │   └── index.js             # Centralized environment config
 ├── db/
@@ -98,7 +106,8 @@ src/
 │   ├── classifier.js        # LLM startup classification (gpt-4o-mini)
 │   ├── enricher.js          # Tabstack /research enrichment + name validation + dead domain detection
 │   ├── entities.js          # Entity resolution + vector dedup
-│   └── reports.js           # Report generation, scoring, URL verification, HTML rendering
+│   ├── reports.js           # Report generation, scoring, URL verification, HTML rendering
+│   └── progress.js          # In-memory job progress tracking for dashboard polling
 ├── routes/
 │   ├── index.js             # Route aggregator
 │   ├── health.js            # GET /api/health
@@ -200,12 +209,16 @@ The server connects to MongoDB, ensures indexes, starts cron jobs, and listens o
 
 | Endpoint | Method | Description |
 | --- | --- | --- |
+| `/` | GET | Dashboard UI (scan, generate report, enrich, view history) |
 | `/api/health` | GET | Health check (server + DB status) |
-| `/api/reports/latest` | GET | Latest report (HTML in browser, JSON for API clients) |
+| `/api/reports/latest` | GET | Latest report metadata (add `?full=true` for full HTML+JSON) |
 | `/api/reports` | GET | List all reports (metadata only) |
 | `/api/entities` | GET | List entities. Query: `?sort=`, `?order=`, `?limit=`, `?skip=`, `?tag=` |
 | `/api/entities/:id` | GET | Entity detail with signals + evidence |
 | `/report` | GET | Latest report rendered as a standalone HTML page |
+| `/report/:id` | GET | Specific report by ID rendered as HTML |
+| `/api/admin/scan/status` | GET | Live scan progress (running state, counts, recent runs) |
+| `/api/admin/jobs` | GET | Live progress for all operations (scan, report, enrich) |
 
 ### Admin Endpoints
 
@@ -214,7 +227,7 @@ Require `Authorization: Bearer <ADMIN_TOKEN>` header (skipped in dev if token is
 | Endpoint | Method | Description |
 | --- | --- | --- |
 | `/api/admin/scan/run` | POST | Trigger a full scan (returns immediately, runs in background) |
-| `/api/admin/report/generate` | POST | Generate a report now (enriches all unenriched entities in background) |
+| `/api/admin/report/generate` | POST | Generate a report (awaits enrichment, then builds HTML) |
 | `/api/admin/enrich` | POST | Manually trigger enrichment. Query: `?limit=15` |
 
 ---
@@ -246,7 +259,7 @@ Sources (~500 candidates per scan)
                             │
                             ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  Extractor (batched, 5 concurrent)                           │
+│  Extractor (batched, 10 concurrent)                          │
 │                                                              │
 │  1. Tabstack /extract/json (structured data + product URL)   │
 │  2. Tabstack /extract/markdown (full text)                   │
@@ -267,7 +280,7 @@ Sources (~500 candidates per scan)
 │  1. Filter: classification.is_startup = true                 │
 │     AND classification.clean_name != null                    │
 │  2. Score by signal weights + recency                        │
-│  3. Research Enrichment (all unenriched entities, background)│
+│  3. Research Enrichment (all unenriched entities, awaited)   │
 │     → Tabstack /research SSE endpoint                        │
 │     → GPT extracts: revenue, funding, users, team size,      │
 │       website URL, growth, founded year, domain status       │
@@ -322,7 +335,7 @@ All classified AI startups are enriched via Tabstack's `/research` SSE endpoint 
 **URL handling:** when enrichment finds a website URL and the name matches, it **always updates** the entity's `website_url`. Research performs a thorough web search and is more reliable than the initial single-page extraction, which can pick up a plausible-looking but incorrect domain.
 
 **Enrichment runs:**
-- Automatically (background) when a report is generated — all unenriched entities
+- Automatically during report generation — all unenriched entities are enriched **before** the report is built (awaited, not background)
 - Manually via `POST /api/admin/enrich?limit=N`
 
 Cost: ~1 Tabstack credit per `/research` call.
@@ -507,3 +520,41 @@ The report resolves each entity's website through a priority chain. All candidat
 | --- | --- | --- |
 | Source scanning | Every 30 minutes | `SCAN_CRON` |
 | Weekly report | Monday 9:00 AM | `WEEKLY_REPORT_CRON` |
+
+---
+
+## Frontend Dashboard
+
+The app serves an embedded dashboard at `/` — no separate frontend build or deployment required.
+
+### Features
+
+- **Scan** — one-click trigger with live progress (candidates found, extracted, failed)
+- **Generate Report** — triggers enrichment + report build with real-time status updates
+- **Enrich Entities** — manual enrichment pass with progress tracking
+- **Report Viewer** — latest report preview with direct link; full report history table
+- **Job Monitor** — all long-running operations show live status via polling (`/api/admin/jobs`)
+- **Tech Stack** — "Powered By" section showing all technologies used
+
+### Architecture
+
+Static files (`index.html`, `style.css`, `app.js`) are served from `src/public/` via `express.static`. No bundler, no framework — vanilla HTML/CSS/JS with `fetch` for API calls and DOM manipulation for updates. Responses are Gzip-compressed via the `compression` middleware.
+
+---
+
+## Deployment (Railway)
+
+The app is deployed to [Railway](https://railway.app) with automatic GitHub integration.
+
+### Setup
+
+1. Connect your GitHub repo to a new Railway project
+2. Set all [environment variables](#environment-variables) in Railway's dashboard
+3. Railway auto-detects `npm start` from `package.json`
+4. Set the **target port** in Railway Networking to match the auto-assigned `PORT` (typically `8080`)
+
+### Requirements
+
+- **MongoDB Atlas:** add `0.0.0.0/0` to the Atlas Network Access IP allowlist so Railway's dynamic IPs can connect
+- **No Dockerfile needed** — Railway uses Nixpacks to detect Node.js and runs `npm start`
+- Pushes to `main` trigger automatic redeployments
