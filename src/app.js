@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import compression from 'compression';
 import routes from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { col } from './db/mongo.js';
@@ -11,6 +12,7 @@ import { col } from './db/mongo.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+app.use(compression());
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(morgan('dev'));
