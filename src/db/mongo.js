@@ -6,6 +6,9 @@ let db;
 
 export async function connectDb() {
   if (db) return db;
+  if (!config.mongo.uri) {
+    throw new Error('MONGODB_URI environment variable is not set');
+  }
   client = new MongoClient(config.mongo.uri);
   await client.connect();
   db = client.db(config.mongo.db);
