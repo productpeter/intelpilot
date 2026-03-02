@@ -88,11 +88,14 @@ export async function generateWeeklyReport() {
     .map((item) => item.entity);
 
   if (toEnrich.length > 0) {
-    console.log(`[Reports] Kicking off background enrichment for ${toEnrich.length} entities…`);
+    console.log(`[Reports] Awaiting enrichment for ${toEnrich.length} entities…`);
     updateJob('report', { message: `Enriching ${toEnrich.length} entities…` });
-    enrichEntities(toEnrich).catch((err) =>
-      console.error('[Reports] Background enrichment error:', err.message),
-    );
+    await enrichEntities(toEnrich);
+
+    for (const item of scoredItems) {
+      const fresh = await col('entities').findOne({ _id: item.entity._id });
+      if (fresh) item.entity = fresh;
+    }
   }
 
   const reportReady = scoredItems.filter((item) => {
