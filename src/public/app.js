@@ -141,18 +141,77 @@ btnScan.addEventListener('click', async () => {
   }
 });
 
+let jobPollTimer = null;
+
+function startJobPolling() {
+  if (jobPollTimer) return;
+  jobPollTimer = setInterval(pollJobs, 3000);
+  setTimeout(pollJobs, 500);
+}
+
+function stopJobPolling() {
+  if (jobPollTimer) { clearInterval(jobPollTimer); jobPollTimer = null; }
+}
+
+async function pollJobs() {
+  try {
+    const jobs = await api('GET', '/admin/jobs');
+
+    if (jobs.report) {
+      const j = jobs.report;
+      if (j.status === 'running') {
+        setStatus('report-status', j.message || 'Generating…', 'loading');
+        btnReport.disabled = true;
+      } else if (j.status === 'done') {
+        setStatus('report-status', `Done — ${j.message}`, 'success');
+        btnReport.disabled = false;
+        loadLatest();
+        loadHistory();
+      } else if (j.status === 'error') {
+        setStatus('report-status', `Error: ${j.message}`, 'error');
+        btnReport.disabled = false;
+      }
+    }
+
+    if (jobs.enrich) {
+      const j = jobs.enrich;
+      if (j.status === 'running') {
+        setStatus('enrich-status', `Enriching… ${j.completed}/${j.total} done, ${j.failed} failed`, 'loading');
+        btnEnrich.disabled = true;
+      } else if (j.status === 'done') {
+        setStatus('enrich-status', `Done — ${j.message}`, 'success');
+        btnEnrich.disabled = false;
+      } else if (j.status === 'error') {
+        setStatus('enrich-status', `Error: ${j.message}`, 'error');
+        btnEnrich.disabled = false;
+      }
+    }
+
+    const anyRunning = Object.values(jobs).some((j) => j.status === 'running');
+    if (!anyRunning) stopJobPolling();
+  } catch {
+    stopJobPolling();
+  }
+}
+
 btnReport.addEventListener('click', async () => {
   btnReport.disabled = true;
-  setStatus('report-status', 'Generating report...', 'loading');
+  setStatus('report-status', 'Starting report generation...', 'loading');
   try {
-    const data = await api('POST', '/admin/report/generate');
-    setStatus('report-status', `Report generated — ${data.items_count} startups`, 'success');
-    loadLatest();
-    loadHistory();
+    api('POST', '/admin/report/generate').then((data) => {
+      setStatus('report-status', `Report generated — ${data.items_count} startups`, 'success');
+      btnReport.disabled = false;
+      loadLatest();
+      loadHistory();
+      stopJobPolling();
+    }).catch((err) => {
+      setStatus('report-status', `Error: ${err.message}`, 'error');
+      btnReport.disabled = false;
+    });
+    startJobPolling();
   } catch (err) {
     setStatus('report-status', `Error: ${err.message}`, 'error');
-  } finally {
-    setTimeout(() => { btnReport.disabled = false; }, 3000);
+    btnReport.disabled = false;
   }
 });
 
@@ -161,11 +220,11 @@ btnEnrich.addEventListener('click', async () => {
   setStatus('enrich-status', 'Starting enrichment...', 'loading');
   try {
     const data = await api('POST', '/admin/enrich');
-    setStatus('enrich-status', data.message || 'Enrichment started', 'success');
+    setStatus('enrich-status', data.message || 'Enrichment started', 'loading');
+    startJobPolling();
   } catch (err) {
     setStatus('enrich-status', `Error: ${err.message}`, 'error');
-  } finally {
-    setTimeout(() => { btnEnrich.disabled = false; }, 3000);
+    btnEnrich.disabled = false;
   }
 });
 

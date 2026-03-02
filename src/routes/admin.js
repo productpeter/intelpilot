@@ -4,6 +4,7 @@ import { runFullScan } from '../services/scanner.js';
 import { generateWeeklyReport } from '../services/reports.js';
 import { enrichEntities } from '../services/enricher.js';
 import { col } from '../db/mongo.js';
+import { getAllJobs } from '../services/progress.js';
 
 const router = Router();
 
@@ -34,6 +35,10 @@ router.get('/scan/status', async (req, res) => {
     recent_runs: runs,
     totals: totalCounts,
   });
+});
+
+router.get('/jobs', (req, res) => {
+  res.json(getAllJobs());
 });
 
 router.use(adminAuth);

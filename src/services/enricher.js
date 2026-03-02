@@ -2,6 +2,7 @@ import { research } from '../lib/tabstack.js';
 import { chatJson } from '../lib/openai.js';
 import { col } from '../db/mongo.js';
 import { isAggregatorUrl, isValidProductUrl } from './extractor.js';
+import { startJob, updateJob, finishJob, failJob } from './progress.js';
 
 const EXTRACT_PROMPT = `You are a startup data extractor. Given research text about a startup/company, extract structured metrics. Respond with JSON:
 
@@ -25,6 +26,8 @@ const ENRICHMENT_CONCURRENCY = 3;
 
 export async function enrichEntities(entities) {
   console.log(`[Enricher] Starting enrichment for ${entities.length} entities…`);
+  const job = startJob('enrich');
+  job.total = entities.length;
   const results = [];
 
   const chunks = [];
@@ -32,13 +35,25 @@ export async function enrichEntities(entities) {
     chunks.push(entities.slice(i, i + ENRICHMENT_CONCURRENCY));
   }
 
-  for (const chunk of chunks) {
-    const settled = await Promise.allSettled(
-      chunk.map((entity) => enrichSingle(entity)),
-    );
-    for (const r of settled) {
-      if (r.status === 'fulfilled' && r.value) results.push(r.value);
+  try {
+    for (const chunk of chunks) {
+      const settled = await Promise.allSettled(
+        chunk.map((entity) => enrichSingle(entity)),
+      );
+      for (const r of settled) {
+        if (r.status === 'fulfilled' && r.value) {
+          results.push(r.value);
+          job.completed++;
+        } else {
+          job.failed++;
+        }
+        updateJob('enrich', { completed: job.completed, failed: job.failed });
+      }
     }
+    finishJob('enrich', `${results.length}/${entities.length} enriched`);
+  } catch (err) {
+    failJob('enrich', err.message);
+    throw err;
   }
 
   console.log(`[Enricher] Completed: ${results.length}/${entities.length} enriched`);

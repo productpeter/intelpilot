@@ -1,6 +1,7 @@
 import { col } from '../db/mongo.js';
 import { enrichEntities } from './enricher.js';
 import { isAggregatorUrl, isValidProductUrl } from './extractor.js';
+import { startJob, updateJob, finishJob, failJob } from './progress.js';
 
 const SIGNAL_WEIGHTS = {
   revenue_claim: 25,
@@ -21,6 +22,8 @@ export async function generateWeeklyReport() {
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   console.log('[Reports] Generating weekly report…');
+  const job = startJob('report');
+  updateJob('report', { message: 'Loading entities…' });
 
   const entities = await col('entities')
     .find({
@@ -73,6 +76,8 @@ export async function generateWeeklyReport() {
     scoredItems.push({ entity, signals, evidence: evidenceDocs, score, sourceCount, avgConfidence, hasRevenue });
   }
 
+  updateJob('report', { message: `Scored ${scoredItems.length} entities, ranking…` });
+
   scoredItems.sort((a, b) => {
     if (a.hasRevenue !== b.hasRevenue) return a.hasRevenue ? -1 : 1;
     return b.score - a.score;
@@ -84,6 +89,7 @@ export async function generateWeeklyReport() {
 
   if (toEnrich.length > 0) {
     console.log(`[Reports] Kicking off background enrichment for ${toEnrich.length} entities…`);
+    updateJob('report', { message: `Enriching ${toEnrich.length} entities…` });
     enrichEntities(toEnrich).catch((err) =>
       console.error('[Reports] Background enrichment error:', err.message),
     );
@@ -144,6 +150,8 @@ export async function generateWeeklyReport() {
     };
   });
 
+  updateJob('report', { message: `Building HTML for ${reportItems.length} items…` });
+
   const reportJson = { period_start: oneWeekAgo, period_end: now, items: reportItems };
   const reportHtml = buildReportHtml(reportJson);
 
@@ -170,6 +178,7 @@ export async function generateWeeklyReport() {
 
   const { insertedId } = await col('reports').insertOne(report);
   console.log(`[Reports] Report generated: ${insertedId} (${reportItems.length} items)`);
+  finishJob('report', `${reportItems.length} startups in report`);
   return report;
 }
 
