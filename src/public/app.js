@@ -90,16 +90,54 @@ async function loadHistory() {
   }
 }
 
+let scanPollTimer = null;
+
+async function pollScanStatus() {
+  try {
+    const data = await api('GET', '/admin/scan/status');
+    if (data.is_running) {
+      const latest = data.latest;
+      const c = latest?.counts || {};
+      setStatus(
+        'scan-status',
+        `Scanning… ${c.extracted_success || 0} extracted, ${c.extracted_fail || 0} failed (${c.candidates_found || 0} candidates)`,
+        'loading',
+      );
+      btnScan.disabled = true;
+    } else {
+      const latest = data.latest;
+      if (latest) {
+        const c = latest.counts || {};
+        const dur = latest.finished_at
+          ? Math.round((new Date(latest.finished_at) - new Date(latest.started_at)) / 1000)
+          : 0;
+        setStatus(
+          'scan-status',
+          `Last scan: ${c.extracted_success || 0} extracted, ${c.extracted_fail || 0} failed — ${dur}s`,
+          'success',
+        );
+      }
+      btnScan.disabled = false;
+      clearInterval(scanPollTimer);
+      scanPollTimer = null;
+    }
+  } catch {
+    clearInterval(scanPollTimer);
+    scanPollTimer = null;
+  }
+}
+
 btnScan.addEventListener('click', async () => {
   btnScan.disabled = true;
   setStatus('scan-status', 'Starting scan...', 'loading');
   try {
-    const data = await api('POST', '/admin/scan/run');
-    setStatus('scan-status', `Scan started — running in background`, 'success');
+    await api('POST', '/admin/scan/run');
+    if (scanPollTimer) clearInterval(scanPollTimer);
+    scanPollTimer = setInterval(pollScanStatus, 3000);
+    setTimeout(pollScanStatus, 1000);
   } catch (err) {
     setStatus('scan-status', `Error: ${err.message}`, 'error');
-  } finally {
-    setTimeout(() => { btnScan.disabled = false; }, 3000);
+    btnScan.disabled = false;
   }
 });
 

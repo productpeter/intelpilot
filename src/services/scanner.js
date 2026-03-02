@@ -87,6 +87,10 @@ export async function runSourceScan(source) {
             );
             scanRun.counts.extracted_fail++;
           }
+          await col('scan_runs').updateOne(
+            { _id: scanRunId },
+            { $set: { counts: scanRun.counts } },
+          );
         }),
       );
     }
