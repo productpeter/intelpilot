@@ -2,7 +2,7 @@ import { col } from '../db/mongo.js';
 import { getAllSources } from '../sources/index.js';
 import { processDiscovery } from './extractor.js';
 
-const EXTRACTION_CONCURRENCY = 5;
+const EXTRACTION_CONCURRENCY = 10;
 
 export async function runFullScan() {
   console.log('[Scanner] Starting full scan (concurrent)…');
