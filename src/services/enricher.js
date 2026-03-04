@@ -163,7 +163,17 @@ async function enrichSingle(entity) {
 
   const entityUpdates = { 'enrichment.web_verified': hasRealData };
   if (nameMatches && metrics.description) entityUpdates.description = metrics.description;
-  if (nameMatches && enrichedWebsite) entityUpdates.website_url = enrichedWebsite;
+
+  if (enrichedWebsite) {
+    const currentUrl = entity.website_url;
+    const currentIsGood = currentUrl && isValidProductUrl(currentUrl);
+    if (nameMatches) {
+      entityUpdates.website_url = enrichedWebsite;
+    } else if (!currentIsGood) {
+      entityUpdates.website_url = enrichedWebsite;
+      console.log(`[Enricher] Overriding bad URL for "${name}": ${currentUrl} → ${enrichedWebsite}`);
+    }
+  }
 
   await col('entities').updateOne(
     { _id: entity._id },
