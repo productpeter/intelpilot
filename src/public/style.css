@@ -1061,9 +1061,10 @@ body {
   .step-icon { width: 18px; height: 18px; font-size: 0.6rem; flex-shrink: 0; }
   .step-label { white-space: nowrap; }
   .step-detail { font-size: 0.66rem; white-space: nowrap; }
-  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar { flex-direction: column; align-items: stretch; gap: 0.6rem; }
   .toolbar-right { flex-wrap: wrap; }
+  .search-box { width: 100%; }
+  .search-box input { width: 100%; }
   .entity-grid { grid-template-columns: 1fr; }
-  .search-box input { width: 120px; }
   .metrics-grid { grid-template-columns: 1fr; }
 }
