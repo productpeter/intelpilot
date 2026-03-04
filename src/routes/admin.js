@@ -3,6 +3,7 @@ import { adminAuth } from '../middleware/auth.js';
 import { runFullScan } from '../services/scanner.js';
 import { generateWeeklyReport } from '../services/reports.js';
 import { enrichEntities } from '../services/enricher.js';
+import { isValidProductUrl } from '../services/extractor.js';
 import { col } from '../db/mongo.js';
 import { getAllJobs } from '../services/progress.js';
 
@@ -104,6 +105,40 @@ router.post('/enrich', async (req, res) => {
     enrichEntities(entities).catch((err) =>
       console.error('[Admin] Enrichment error:', err),
     );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/fix-urls', async (req, res) => {
+  try {
+    const entities = await col('entities')
+      .find({
+        'classification.is_startup': true,
+        'enrichment.metrics.website': { $ne: null },
+      })
+      .toArray();
+
+    let fixed = 0;
+    for (const e of entities) {
+      let enrichedUrl = e.enrichment.metrics.website;
+      if (enrichedUrl && !/^https?:\/\//i.test(enrichedUrl)) {
+        enrichedUrl = `https://${enrichedUrl}`;
+      }
+      if (!enrichedUrl || !isValidProductUrl(enrichedUrl)) continue;
+
+      const current = e.website_url;
+      if (current === enrichedUrl) continue;
+
+      await col('entities').updateOne(
+        { _id: e._id },
+        { $set: { website_url: enrichedUrl } },
+      );
+      console.log(`[FixURLs] ${e.name}: ${current} → ${enrichedUrl}`);
+      fixed++;
+    }
+
+    res.json({ message: `Fixed ${fixed} entity URLs`, fixed });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,6 +1,6 @@
 import { col } from '../db/mongo.js';
 import { getAllSources } from '../sources/index.js';
-import { processDiscovery } from './extractor.js';
+import { processDiscovery, isValidProductUrl } from './extractor.js';
 import { enrichEntities } from './enricher.js';
 import { generateWeeklyReport } from './reports.js';
 
@@ -41,6 +41,32 @@ async function triggerPostScanPipeline() {
     await enrichEntities(unenriched);
   } else {
     console.log('[Scanner] No unenriched entities after scan');
+  }
+
+  const badUrlEntities = await col('entities')
+    .find({
+      'classification.is_startup': true,
+      'enrichment': { $exists: true },
+      'enrichment.metrics.website': { $ne: null },
+    })
+    .toArray();
+
+  const needsReenrich = badUrlEntities.filter((e) => {
+    const current = e.website_url;
+    if (!current) return true;
+    return !isValidProductUrl(current);
+  });
+
+  if (needsReenrich.length) {
+    console.log(`[Scanner] Re-enriching ${needsReenrich.length} entities with bad URLs…`);
+    for (const e of needsReenrich) {
+      let url = e.enrichment.metrics.website;
+      if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+      if (url && isValidProductUrl(url)) {
+        await col('entities').updateOne({ _id: e._id }, { $set: { website_url: url } });
+        console.log(`[Scanner] Fixed URL for "${e.name}": ${e.website_url} → ${url}`);
+      }
+    }
   }
 
   console.log('[Scanner] Auto-generating report…');
