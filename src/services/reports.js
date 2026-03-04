@@ -29,6 +29,12 @@ export async function generateWeeklyReport() {
 
   console.log(`[Reports] Found ${entities.length} new startups since ${cutoff.toISOString()}`);
 
+  if (entities.length === 0) {
+    console.log('[Reports] No new startups — skipping report generation');
+    finishJob('report', { message: 'No new startups to report' });
+    return { items: [], stats: { entities_in_report: 0 } };
+  }
+
   const toEnrich = entities.filter((e) => !e.enrichment);
   if (toEnrich.length > 0) {
     console.log(`[Reports] Awaiting enrichment for ${toEnrich.length} entities…`);
