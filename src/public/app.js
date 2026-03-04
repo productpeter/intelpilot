@@ -627,7 +627,9 @@ function escAttr(str) {
 $('#btn-reports-toggle').addEventListener('click', (ev) => {
   ev.stopPropagation();
   const dd = $('#report-history-dropdown');
+  const opening = dd.hidden;
   dd.hidden = !dd.hidden;
+  if (opening) loadHistory();
 });
 
 document.addEventListener('click', (ev) => {
