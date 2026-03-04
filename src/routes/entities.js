@@ -19,8 +19,15 @@ router.get('/', async (req, res) => {
   const sk = parseInt(skip, 10) || 0;
 
   const listProjection = {
-    embedding: 0,
-    'enrichment.research_text': 0,
+    name: 1,
+    description: 1,
+    website_url: 1,
+    classification: 1,
+    'enrichment.metrics': 1,
+    'enrichment.web_verified': 1,
+    'enrichment.enriched_at': 1,
+    updated_at: 1,
+    created_at: 1,
   };
 
   const [data, total] = await Promise.all([
