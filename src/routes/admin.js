@@ -9,16 +9,35 @@ import { getAllJobs } from '../services/progress.js';
 const router = Router();
 
 router.get('/scan/status', async (req, res) => {
+  const staleThreshold = new Date(Date.now() - 15 * 60 * 1000);
+  await col('scan_runs').updateMany(
+    { status: 'running', started_at: { $lt: staleThreshold } },
+    { $set: { status: 'fail', finished_at: new Date() } },
+  );
+
   const runs = await col('scan_runs')
     .find({})
     .sort({ started_at: -1 })
-    .limit(10)
+    .limit(20)
     .toArray();
 
   const running = runs.filter((r) => r.status === 'running');
   const latest = runs[0] || null;
 
-  const totalCounts = runs.reduce(
+  const activeCounts = running.reduce(
+    (acc, r) => {
+      acc.candidates += r.counts?.candidates_found || 0;
+      acc.success += r.counts?.extracted_success || 0;
+      acc.fail += r.counts?.extracted_fail || 0;
+      return acc;
+    },
+    { candidates: 0, success: 0, fail: 0 },
+  );
+
+  const latestBatch = latest?.started_at
+    ? runs.filter((r) => Math.abs(new Date(r.started_at) - new Date(latest.started_at)) < 5000)
+    : [];
+  const batchCounts = latestBatch.reduce(
     (acc, r) => {
       acc.candidates += r.counts?.candidates_found || 0;
       acc.success += r.counts?.extracted_success || 0;
@@ -32,8 +51,8 @@ router.get('/scan/status', async (req, res) => {
     is_running: running.length > 0,
     running_count: running.length,
     latest,
-    recent_runs: runs,
-    totals: totalCounts,
+    recent_runs: runs.slice(0, 10),
+    counts: running.length > 0 ? activeCounts : batchCounts,
   });
 });
 

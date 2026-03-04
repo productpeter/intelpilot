@@ -480,12 +480,11 @@ async function pollPipeline() {
     ]);
 
     if (!pipelineScanDone) {
+      const c = scanData.counts || {};
       if (scanData.is_running) {
-        const c = scanData.latest?.counts || {};
-        setStepState('scan', 'active', `${c.extracted_success || 0} extracted · ${c.candidates_found || 0} candidates`);
+        setStepState('scan', 'active', `${c.success || 0} extracted · ${c.candidates || 0} candidates`);
       } else {
-        const c = scanData.latest?.counts || {};
-        setStepState('scan', 'done', `${c.extracted_success || 0} extracted`);
+        setStepState('scan', 'done', `${c.success || 0} extracted`);
         pipelineScanDone = true;
         loadEntities();
       }
@@ -651,8 +650,8 @@ async function checkRunningPipeline() {
       pipelineScanDone = false;
       pipelineEnrichDone = false;
       pipelineReportDone = false;
-      const c = scanData.latest?.counts || {};
-      setStepState('scan', 'active', `${c.extracted_success || 0} extracted · ${c.candidates_found || 0} candidates`);
+      const c = scanData.counts || {};
+      setStepState('scan', 'active', `${c.success || 0} extracted · ${c.candidates || 0} candidates`);
       setStepState('enrich', '', 'waiting');
       setStepState('report', '', 'waiting');
     } else if (enrichRunning) {
