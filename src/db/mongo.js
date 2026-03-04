@@ -40,6 +40,7 @@ async function ensureIndexes(database) {
   await database.collection('entities').createIndex({ canonical_domain: 1 });
   await database.collection('entities').createIndex({ name: 1 });
   await database.collection('entities').createIndex({ 'classification.is_startup': 1, updated_at: -1 });
+  await database.collection('entities').createIndex({ 'classification.is_startup': 1, created_at: -1 });
 
   await database.collection('evidence').createIndex({ url: 1 });
 

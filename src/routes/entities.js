@@ -22,6 +22,7 @@ router.get('/', async (req, res) => {
     col('entities')
       .find(filter, { projection: { embedding: 0 } })
       .sort({ [sort]: sortDir })
+      .allowDiskUse()
       .skip(sk)
       .limit(lim)
       .toArray(),
