@@ -409,6 +409,7 @@ $('#modal-overlay').addEventListener('click', (ev) => {
 
 /* Report modal */
 function openReportModal(url) {
+  _reportDD.hidden = true;
   const overlay = $('#report-modal-overlay');
   const iframe = $('#report-modal-iframe');
   const newtab = $('#report-modal-newtab');

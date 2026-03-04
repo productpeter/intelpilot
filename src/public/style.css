@@ -33,6 +33,7 @@ body {
   color: var(--text);
   line-height: 1.5;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* Navbar */
@@ -1032,11 +1033,13 @@ body {
   .pipeline-progress {
     padding: 0.5rem 0;
     width: calc(100% + 2rem); margin-left: -1rem; margin-right: -1rem;
+    overflow: hidden;
   }
   .pipeline-steps {
     display: flex; flex-direction: row; gap: 0.5rem;
     overflow-x: auto; -webkit-overflow-scrolling: touch;
     padding: 0 1.5rem 0.2rem;
+    max-width: 100%;
   }
   .pipeline-steps::after { content: ''; min-width: 0.5rem; flex-shrink: 0; }
   .pipeline-step + .pipeline-step::before { display: none; }
