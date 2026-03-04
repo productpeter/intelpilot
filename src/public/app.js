@@ -599,10 +599,10 @@ async function loadHistory() {
       list.innerHTML = '<p class="muted">No reports generated yet.</p>';
       return;
     }
-    list.innerHTML = reports.map((r) => `
-      <div class="history-item">
+    list.innerHTML = reports.map((r, i) => `
+      <div class="history-item${i === 0 ? ' latest' : ''}">
         <div class="hi-info">
-          <span class="hi-date">${fmtFull(r.generated_at)}</span>
+          <span class="hi-date">${i === 0 ? 'Latest — ' : ''}${fmtFull(r.generated_at)}</span>
           <span class="hi-stats">${r.stats?.entities_in_report || '?'} startups · ${r.stats?.total_entities_updated || '?'} scanned</span>
         </div>
         <button class="hi-link" onclick="openReportModal('/report/${r._id}')">View</button>
@@ -623,8 +623,8 @@ function escAttr(str) {
   return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/* Report history dropdown */
-$('#btn-history-toggle').addEventListener('click', (ev) => {
+/* Reports dropdown */
+$('#btn-reports-toggle').addEventListener('click', (ev) => {
   ev.stopPropagation();
   const dd = $('#report-history-dropdown');
   dd.hidden = !dd.hidden;

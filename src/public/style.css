@@ -574,9 +574,6 @@ body {
   gap: 2px;
 }
 
-.report-history-toggle {
-  gap: 0.35rem;
-}
 
 .report-history-dropdown[hidden] { display: none !important; }
 
@@ -598,16 +595,6 @@ body {
   animation: fadeIn 0.12s ease;
 }
 
-.rhd-header {
-  padding: 0.6rem 1rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-dim);
-  border-bottom: 1px solid var(--border);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
 .rhd-list {
   overflow-y: auto;
   padding: 0.4rem 0;
@@ -623,6 +610,8 @@ body {
 }
 
 .history-item:hover { background: var(--surface-2); }
+.history-item.latest { border-bottom: 1px solid var(--border); padding-bottom: 0.6rem; margin-bottom: 0.2rem; }
+.history-item.latest .hi-date { color: var(--accent); }
 
 .hi-info { display: flex; flex-direction: column; }
 
@@ -1028,7 +1017,7 @@ body {
   .nav-brand { flex-shrink: 0; }
   .nav-status { flex-shrink: 0; margin-left: auto; }
   .nav-actions { width: calc(100% + 2rem); margin-left: -1rem; margin-right: -1rem; padding: 0 1rem; overflow-x: auto; -webkit-overflow-scrolling: touch; display: flex; gap: 0.4rem; }
-  .nav-actions .nav-btn, .nav-actions .report-history-toggle { white-space: nowrap; font-size: 0.72rem; padding: 0.35rem 0.6rem; flex-shrink: 0; }
+  .nav-actions .nav-btn { white-space: nowrap; font-size: 0.72rem; padding: 0.35rem 0.6rem; flex-shrink: 0; }
   .report-dropdown-wrap { flex-shrink: 0; }
   .report-history-dropdown { width: 280px; right: 0; }
   .pipeline-steps { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.2rem; }

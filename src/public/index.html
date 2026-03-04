@@ -27,16 +27,11 @@
         <div class="btn-tooltip">Crawl all sources for new AI startups, auto-enrich discovered entities, then generate a report.</div>
       </div>
       <div class="report-dropdown-wrap">
-        <button id="link-report" class="nav-btn ghost" onclick="openReportModal('/report')">
+        <button class="nav-btn ghost" id="btn-reports-toggle">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          Newest Startup Report
-        </button>
-        <button class="nav-btn ghost report-history-toggle" id="btn-history-toggle">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Past Reports
+          Reports
         </button>
         <div class="report-history-dropdown" id="report-history-dropdown" hidden>
-          <div class="rhd-header">Past Reports</div>
           <div class="rhd-list" id="history-list">
             <p class="muted">Loading…</p>
           </div>
