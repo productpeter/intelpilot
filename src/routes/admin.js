@@ -123,12 +123,15 @@ router.post('/fix-urls', async (req, res) => {
     for (const e of entities) {
       let enrichedUrl = e.enrichment.metrics.website;
       if (enrichedUrl && !/^https?:\/\//i.test(enrichedUrl)) {
+        if (/^\//.test(enrichedUrl) || !enrichedUrl.includes('.')) continue;
         enrichedUrl = `https://${enrichedUrl}`;
       }
-      if (!enrichedUrl || !isValidProductUrl(enrichedUrl)) continue;
+      if (!enrichedUrl) continue;
 
       const current = e.website_url;
       if (current === enrichedUrl) continue;
+
+      try { new URL(enrichedUrl); } catch { continue; }
 
       await col('entities').updateOne(
         { _id: e._id },
