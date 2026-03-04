@@ -3,14 +3,21 @@ import config from '../config/index.js';
 import { runFullScan } from '../services/scanner.js';
 
 export function startCronJobs() {
-  cron.schedule(config.cron.scan, async () => {
-    console.log('[Cron] Starting daily scan (scan → enrich → report)…');
-    try {
-      await runFullScan();
-    } catch (err) {
-      console.error('[Cron] Scan pipeline failed:', err.message);
-    }
-  });
+  const tz = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  console.log(`[Cron] Container timezone: ${tz}, forcing UTC for schedule`);
 
-  console.log(`[Cron] Daily scan schedule: ${config.cron.scan}`);
+  cron.schedule(
+    config.cron.scan,
+    async () => {
+      console.log(`[Cron] Fired at ${new Date().toISOString()} — starting daily scan…`);
+      try {
+        await runFullScan();
+      } catch (err) {
+        console.error('[Cron] Scan pipeline failed:', err.message);
+      }
+    },
+    { timezone: 'UTC' },
+  );
+
+  console.log(`[Cron] Daily scan schedule: ${config.cron.scan} (UTC)`);
 }
