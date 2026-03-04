@@ -31,8 +31,7 @@ const config = {
   },
 
   cron: {
-    scan: process.env.SCAN_CRON || '*/30 * * * *',
-    weeklyReport: process.env.WEEKLY_REPORT_CRON || '0 9 * * 1',
+    scan: process.env.SCAN_CRON || '0 8 * * *',
   },
 };
 

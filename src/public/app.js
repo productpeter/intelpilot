@@ -631,7 +631,56 @@ document.addEventListener('keydown', (ev) => {
   }
 });
 
+async function checkRunningPipeline() {
+  try {
+    const [scanData, jobs] = await Promise.all([
+      api('GET', '/admin/scan/status'),
+      api('GET', '/admin/jobs'),
+    ]);
+
+    const scanRunning = scanData.is_running;
+    const enrichRunning = jobs.enrich?.status === 'running';
+    const reportRunning = jobs.report?.status === 'running';
+
+    if (!scanRunning && !enrichRunning && !reportRunning) return;
+
+    $('#btn-scan').disabled = true;
+    showPipeline();
+
+    if (scanRunning) {
+      pipelineScanDone = false;
+      pipelineEnrichDone = false;
+      pipelineReportDone = false;
+      const c = scanData.latest?.counts || {};
+      setStepState('scan', 'active', `${c.extracted_success || 0} extracted · ${c.candidates_found || 0} candidates`);
+      setStepState('enrich', '', 'waiting');
+      setStepState('report', '', 'waiting');
+    } else if (enrichRunning) {
+      pipelineScanDone = true;
+      pipelineEnrichDone = false;
+      pipelineReportDone = false;
+      setStepState('scan', 'done', 'complete');
+      const ej = jobs.enrich;
+      setStepState('enrich', 'active', `${ej.completed || 0}/${ej.total || '?'} done`);
+      setStepState('report', '', 'waiting');
+    } else if (reportRunning) {
+      pipelineScanDone = true;
+      pipelineEnrichDone = true;
+      pipelineReportDone = false;
+      setStepState('scan', 'done', 'complete');
+      setStepState('enrich', 'done', 'complete');
+      setStepState('report', 'active', jobs.report.message || 'generating…');
+    }
+
+    setFeedback('Pipeline in progress…', 'loading');
+    startPipelinePolling();
+  } catch {
+    // ignore — no running pipeline
+  }
+}
+
 checkHealth();
 loadEntities();
 loadHistory();
+checkRunningPipeline();
 setInterval(checkHealth, 30000);
