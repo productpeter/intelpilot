@@ -1,6 +1,6 @@
 # IntelPilot
 
-Agentic research system that continuously monitors the web for **AI startup signals** — new companies, traction indicators, funding, team size, user counts — and produces **evidence-backed weekly intelligence reports** enriched with deep-web research.
+Agentic research system that continuously monitors the web for **AI startup signals** — new companies, traction indicators, funding, team size, user counts — and produces **evidence-backed intelligence reports** of newly discovered startups, enriched with deep-web research.
 
 ---
 
@@ -31,9 +31,9 @@ Agentic research system that continuously monitors the web for **AI startup sign
 
 ## Product Goal
 
-Build an agentic research system that continuously monitors the web for new **AI startups and products**, classifies them using LLMs, enriches them with deep-web research, and produces ranked weekly intelligence reports with verified data and website URLs.
+Build an agentic research system that continuously monitors the web for new **AI startups and products**, classifies them using LLMs, enriches them with deep-web research, and produces intelligence reports of newly discovered startups with verified data and website URLs.
 
-This MVP covers **discovery + classification + enrichment + report generation**. No email/notifications.
+This MVP covers **discovery + classification + enrichment + report generation**. A single "Scan" action runs the full pipeline automatically. No email/notifications.
 
 ---
 
@@ -43,9 +43,11 @@ This MVP covers **discovery + classification + enrichment + report generation**.
 2. **Extract** — Uses Tabstack API to pull structured data from each candidate URL (including explicit product website URL detection)
 3. **Classify** — OpenAI `gpt-4o-mini` classifies each entity: is it an AI startup with an identifiable product name?
 4. **Deduplicate** — Three-tier entity resolution (domain match → name match → vector similarity via Atlas Vector Search)
-5. **Enrich** — All report entities are researched via Tabstack `/research` endpoint, then metrics are extracted with GPT (with name-matching validation and dead domain detection)
+5. **Enrich** — Unenriched entities are automatically researched via Tabstack `/research` endpoint, then metrics are extracted with GPT (with name-matching validation and dead domain detection)
 6. **Verify** — Entities enriched but with no web presence are heavily penalized; parked/dead domains are auto-delisted
-7. **Report** — Scored and ranked into an HTML + JSON report (up to 50 entries) with website URLs, revenue, funding, users, and team size
+7. **Report** — Automatically generated after enrichment; shows only **newly discovered startups since the last report**, sorted chronologically (newest first), with source badges and discovery timestamps
+
+The entire pipeline (steps 1–7) runs as a single automated flow — triggered by the "Scan" button or the daily cron job.
 
 ---
 
@@ -80,9 +82,9 @@ src/
 ├── index.js                 # Server entry point
 ├── app.js                   # Express app (middleware, static files, routes, /report page)
 ├── public/
-│   ├── index.html           # Dashboard UI (actions, status, report history, tech stack)
-│   ├── style.css            # Dashboard styles (dark header, cards, responsive grid)
-│   └── app.js               # Frontend logic (API calls, polling, status updates)
+│   ├── index.html           # Dashboard UI (scan, entity grid, report modal, pipeline progress)
+│   ├── style.css            # Dashboard styles (dark theme, cards, modals, responsive)
+│   └── app.js               # Frontend logic (API calls, pipeline polling, entity grid, report modal)
 ├── config/
 │   └── index.js             # Centralized environment config
 ├── db/
@@ -101,12 +103,12 @@ src/
 │   ├── reddit.js            # 10 subreddits (SaaS, startups, indiehackers, artificial, LocalLLaMA, machinelearning, ChatGPT, singularity, OpenAI, AItools)
 │   └── betalist.js          # BetaList new startups (via Tabstack extract)
 ├── services/
-│   ├── scanner.js           # Concurrent scan orchestration
+│   ├── scanner.js           # Concurrent scan orchestration + auto-enrich + auto-report pipeline
 │   ├── extractor.js         # Tabstack extraction + product URL resolution + classifier integration
 │   ├── classifier.js        # LLM startup classification (gpt-4o-mini)
 │   ├── enricher.js          # Tabstack /research enrichment + name validation + dead domain detection
 │   ├── entities.js          # Entity resolution + vector dedup
-│   ├── reports.js           # Report generation, scoring, URL verification, HTML rendering
+│   ├── reports.js           # New-discoveries report generation, URL verification, dark-theme HTML
 │   └── progress.js          # In-memory job progress tracking for dashboard polling
 ├── routes/
 │   ├── index.js             # Route aggregator
@@ -118,7 +120,7 @@ src/
 │   ├── errorHandler.js      # Global error handler
 │   └── auth.js              # Admin bearer token auth
 └── cron/
-    └── index.js             # Cron job setup (scan + report)
+    └── index.js             # Daily scan cron (full pipeline: scan → enrich → report)
 ```
 
 ---
@@ -149,8 +151,7 @@ cp .env.example .env
 | `OPENAI_API_KEY` | **Yes** | OpenAI API key (used for embeddings + gpt-4o-mini classification/extraction) |
 | `OPENAI_EMBEDDING_MODEL` | No | Embedding model (default: `text-embedding-3-large`) |
 | `OPENAI_EMBEDDING_DIM` | No | Vector dimensions (default: `3072`) |
-| `SCAN_CRON` | No | Scan schedule (default: `*/30 * * * *` = every 30 min) |
-| `WEEKLY_REPORT_CRON` | No | Report schedule (default: `0 9 * * 1` = Monday 9am) |
+| `SCAN_CRON` | No | Daily scan schedule (default: `0 8 * * *` = every day at 8:00 AM UTC) |
 | `R2_BUCKET` | No | R2 bucket name |
 | `R2_ACCOUNT_ID` | No | Cloudflare account ID |
 | `R2_ACCESS_KEY_ID` | No | R2 access key |
@@ -209,7 +210,7 @@ The server connects to MongoDB, ensures indexes, starts cron jobs, and listens o
 
 | Endpoint | Method | Description |
 | --- | --- | --- |
-| `/` | GET | Dashboard UI (scan, generate report, enrich, view history) |
+| `/` | GET | Dashboard UI (scan pipeline, entity grid, report viewer) |
 | `/api/health` | GET | Health check (server + DB status) |
 | `/api/reports/latest` | GET | Latest report metadata (add `?full=true` for full HTML+JSON) |
 | `/api/reports` | GET | List all reports (metadata only) |
@@ -226,8 +227,8 @@ Require `Authorization: Bearer <ADMIN_TOKEN>` header (skipped in dev if token is
 
 | Endpoint | Method | Description |
 | --- | --- | --- |
-| `/api/admin/scan/run` | POST | Trigger a full scan (returns immediately, runs in background) |
-| `/api/admin/report/generate` | POST | Generate a report (awaits enrichment, then builds HTML) |
+| `/api/admin/scan/run` | POST | Trigger full pipeline: scan → enrich → report (returns immediately, runs in background) |
+| `/api/admin/report/generate` | POST | Generate a report manually (awaits enrichment, then builds HTML) |
 | `/api/admin/enrich` | POST | Manually trigger enrichment. Query: `?limit=15` |
 
 ---
@@ -249,18 +250,12 @@ All sources run concurrently during scans. Reddit fetches from all 10 subreddits
 ## Pipeline Architecture
 
 ```
-Sources (~500 candidates per scan)
-    │
-    ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  Scanner (concurrent across all sources)                     │
+│  STEP 1: SCAN                                                │
+│  Sources (~500 candidates per scan, all concurrent)          │
 │  Product Hunt │ HN (40) │ RSS (4 feeds) │ 10x Reddit │ Beta  │
-└───────────────────────────┬──────────────────────────────────┘
-                            │
-                            ▼
-┌──────────────────────────────────────────────────────────────┐
-│  Extractor (batched, 10 concurrent)                          │
 │                                                              │
+│  Extractor (batched, 10 concurrent):                         │
 │  1. Tabstack /extract/json (structured data + product URL)   │
 │  2. Tabstack /extract/markdown (full text)                   │
 │  3. Resolve product website (from relevant_links, domain)    │
@@ -272,26 +267,34 @@ Sources (~500 candidates per scan)
 │     → is_startup, clean_name, category, one_liner            │
 │     → website_url (validated by isValidProductUrl)           │
 └───────────────────────────┬──────────────────────────────────┘
-                            │
+                            │ automatic
                             ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  Report Generation                                           │
+│  STEP 2: ENRICH                                              │
+│  Auto-enriches up to 30 unenriched startup entities          │
 │                                                              │
-│  1. Filter: classification.is_startup = true                 │
-│     AND classification.clean_name != null                    │
-│  2. Score by signal weights + recency                        │
-│  3. Research Enrichment (all unenriched entities, awaited)   │
-│     → Tabstack /research SSE endpoint                        │
-│     → GPT extracts: revenue, funding, users, team size,      │
-│       website URL, growth, founded year, domain status       │
-│     → Name-match validation (Levenshtein ≥ 0.7)              │
-│     → Research URL always preferred over extraction URL      │
-│     → Dead/parked domain auto-delist                         │
-│  4. Exclude entities with no discoverable website            │
-│  5. Verification penalty (no web presence → score × 0.1)     │
-│  6. Rank top 50, build HTML + JSON report                    │
+│  1. Tabstack /research SSE endpoint                          │
+│  2. GPT extracts: revenue, funding, users, team size,        │
+│     website URL, growth, founded year, domain status         │
+│  3. Name-match validation (Levenshtein ≥ 0.7)                │
+│  4. Research URL always preferred over extraction URL        │
+│  5. Dead/parked domain auto-delist                           │
+└───────────────────────────┬──────────────────────────────────┘
+                            │ automatic
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│  STEP 3: REPORT                                              │
+│  Auto-generates a "New Discoveries" report                   │
+│                                                              │
+│  1. Cutoff = last report's generated_at (or 7 days ago)      │
+│  2. Filter entities created after cutoff (is_startup = true) │
+│  3. Sort chronologically (newest first), no cap              │
+│  4. Include source badges + discovery timestamps             │
+│  5. Build dark-themed HTML + JSON report                     │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+The entire pipeline runs as a single automated flow — triggered by the dashboard "Scan" button or the daily cron job. The frontend shows a 3-step progress tracker (Scanning → Enriching → Generating report) with live status updates.
 
 ---
 
@@ -308,7 +311,7 @@ Every entity is classified by OpenAI `gpt-4o-mini` after extraction. The classif
 | `category` | AI sub-category (e.g. AI Agent, LLM Tool, AI SaaS, AI Healthcare) |
 | `website_url` | Product's own website URL (aggregator URLs like PH/HN/Reddit are rejected) |
 
-**Filtered out:** non-AI startups, news articles, opinion pieces, questions, established/well-known companies (Google, Microsoft, OpenAI, Anthropic, Meta, Amazon, Apple, Notion, Slack, Figma, Stripe, Vercel, Supabase, Datadog, Cloudflare, etc.), portfolio sites, agencies, consulting firms, unnamed projects.
+**Filtered out:** non-AI startups, news articles, opinion pieces, questions, publicly traded mega-corporations (Google, Microsoft, Meta, Amazon, Apple, etc.), portfolio sites, agencies, consulting firms, unnamed projects. Private AI companies of any size (Cursor, Perplexity, Anthropic, OpenAI, Midjourney, etc.) are kept.
 
 **Name validation:** names longer than 40 characters or more than 5 words are rejected (entity marked as not a startup).
 
@@ -335,7 +338,8 @@ All classified AI startups are enriched via Tabstack's `/research` SSE endpoint 
 **URL handling:** when enrichment finds a website URL and the name matches, it **always updates** the entity's `website_url`. Research performs a thorough web search and is more reliable than the initial single-page extraction, which can pick up a plausible-looking but incorrect domain.
 
 **Enrichment runs:**
-- Automatically during report generation — all unenriched entities are enriched **before** the report is built (awaited, not background)
+- Automatically after each scan — up to 30 unenriched entities are enriched before report generation
+- During report generation — any remaining unenriched entities in the report set are enriched before the report is built
 - Manually via `POST /api/admin/enrich?limit=N`
 
 Cost: ~1 Tabstack credit per `/research` call.
@@ -453,7 +457,7 @@ Signals are extracted from page content using regex heuristics, then enriched vi
 | `launch_announcement` | New product launches | `just launched`, `Show HN:`, `now available` | 4 |
 | `trend_indicator` | Topic/category tags | Tags inferred by Tabstack | 1 |
 
-Revenue-bearing entities receive a +100 score bonus and are always sorted first.
+Revenue-bearing entities are prioritized in the dashboard grid view (sorted first with "Revenue First" default sort).
 
 ---
 
@@ -476,33 +480,29 @@ Reddit self-posts use pseudo-domains (e.g. `reddit-postId`) to ensure each post 
 
 ## Report Generation
 
-Reports are generated on schedule (`0 9 * * 1` = Monday 9am) or on demand via `POST /api/admin/report/generate`.
+Reports are auto-generated after each scan pipeline completes (scan → enrich → report). They can also be triggered manually via `POST /api/admin/report/generate`.
+
+### New Discoveries Report
+
+Each report shows only **startups discovered since the last report was generated** (or the last 7 days if no prior report exists). There is no entry cap — all new startups are included.
 
 ### Report item fields
 
 Each report entry includes:
 - Entity name (clickable link to product website)
 - AI category badge
+- **Source badges** (Reddit, Product Hunt, Hacker News, BetaList, etc.)
 - Website URL (verified against aggregator blocklist; falls back to evidence URLs)
 - Metric badges: Revenue, Funding, Users, Growth, Team Size
 - Notable facts (YC batch, awards, notable customers)
 - Short description
 - Tags
 - Collapsible Signals and Evidence sections
-- Source count + average confidence
+- **Discovery timestamp** (when first found)
 
-### Scoring formula
+### Ordering
 
-| Factor | Effect |
-| --- | --- |
-| Signal weights | Each signal × confidence × weight (see table above) |
-| Revenue bonus | +100 if any `revenue_claim` signal exists |
-| Multi-source mentions | +3 per unique source |
-| Recency | +0 to +7 based on days since last update |
-| Verification penalty | ×0.1 if enriched but no web presence found |
-| No-website exclusion | Enriched entities with no discoverable website are excluded entirely |
-
-Top 50 entities by score are included. Reports are stored as both `report_json` (structured) and `report_html` (styled, self-contained HTML page).
+Entries are sorted **chronologically (newest first)** — no scoring or ranking. This gives a clear "what's new" view.
 
 ### Website URL resolution (report-level)
 
@@ -512,14 +512,19 @@ The report resolves each entity's website through a priority chain. All candidat
 3. `entity.canonical_domain` (if not a pseudo-domain and contains a dot)
 4. Evidence URLs (first valid product URL)
 
+### Report styling
+
+Reports use the same dark theme as the dashboard (matching CSS variables, colors, and card styles). They are rendered in an in-app modal with an option to open in a new tab.
+
 ---
 
-## Cron Schedules
+## Cron Schedule
 
 | Job | Default Schedule | Env Variable |
 | --- | --- | --- |
-| Source scanning | Every 30 minutes | `SCAN_CRON` |
-| Weekly report | Monday 9:00 AM | `WEEKLY_REPORT_CRON` |
+| Full pipeline (scan → enrich → report) | Daily at 8:00 AM UTC | `SCAN_CRON` |
+
+A single daily cron runs the entire pipeline. The scan discovers new startups, enrichment researches them, and a report is auto-generated with all new findings.
 
 ---
 
@@ -529,12 +534,15 @@ The app serves an embedded dashboard at `/` — no separate frontend build or de
 
 ### Features
 
-- **Scan** — one-click trigger with live progress (candidates found, extracted, failed)
-- **Generate Report** — triggers enrichment + report build with real-time status updates
-- **Enrich Entities** — manual enrichment pass with progress tracking
-- **Report Viewer** — latest report preview with direct link; full report history table
-- **Job Monitor** — all long-running operations show live status via polling (`/api/admin/jobs`)
-- **Tech Stack** — "Powered By" section showing all technologies used
+- **Entity Grid** — all discovered AI startups displayed as cards with metrics (revenue, funding, users, team size), search, category filter, and sorting (Revenue First, Recently Updated, Newest First, Name A–Z)
+- **Entity Detail Modal** — click any card to see full metrics, signals, evidence, source mentions, and discovery timeline
+- **Scan Pipeline** — one-click "Scan for New Startups" button triggers the full pipeline (scan → enrich → report) with a **3-step progress tracker** showing live status for each stage
+- **Pipeline Persistence** — refreshing the page mid-scan automatically detects and resumes progress tracking
+- **Report Modal** — "Newest Startup Report" opens the latest report in an in-app modal (dark-themed, matching the dashboard). Option to open in a new tab
+- **Past Reports** — dropdown in the navbar listing all historical reports, each viewable in the modal
+- **Stale Run Cleanup** — scan runs stuck for 15+ minutes are auto-marked as failed
+- **Tech Stack** — footer showing all technologies used
+- **Responsive** — mobile-friendly with scrollable navbar and single-column grid
 
 ### Architecture
 
