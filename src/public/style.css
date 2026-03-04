@@ -1018,8 +1018,8 @@ body {
   .nav-status { flex-shrink: 0; margin-left: auto; }
   .nav-actions { width: calc(100% + 2rem); margin-left: -1rem; margin-right: -1rem; padding: 0 1rem; overflow-x: auto; -webkit-overflow-scrolling: touch; display: flex; gap: 0.4rem; }
   .nav-actions .nav-btn { white-space: nowrap; font-size: 0.72rem; padding: 0.35rem 0.6rem; flex-shrink: 0; }
-  .report-dropdown-wrap { flex-shrink: 0; }
-  .report-history-dropdown { width: 280px; right: 0; }
+  .report-dropdown-wrap { flex-shrink: 0; position: static; }
+  .report-history-dropdown { position: fixed; width: calc(100vw - 2rem); max-width: 340px; left: 1rem; right: 1rem; top: auto; z-index: 9999; }
   .pipeline-steps { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.2rem; }
   .toolbar { flex-direction: column; align-items: stretch; }
   .toolbar-right { flex-wrap: wrap; }

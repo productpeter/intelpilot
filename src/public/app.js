@@ -629,7 +629,15 @@ $('#btn-reports-toggle').addEventListener('click', (ev) => {
   const dd = $('#report-history-dropdown');
   const opening = dd.hidden;
   dd.hidden = !dd.hidden;
-  if (opening) loadHistory();
+  if (opening) {
+    loadHistory();
+    if (window.innerWidth <= 768) {
+      const rect = ev.currentTarget.getBoundingClientRect();
+      dd.style.top = `${rect.bottom + 6}px`;
+    } else {
+      dd.style.top = '';
+    }
+  }
 });
 
 document.addEventListener('click', (ev) => {
