@@ -103,10 +103,10 @@ src/
 │   ├── reddit.js            # 10 subreddits (SaaS, startups, indiehackers, artificial, LocalLLaMA, machinelearning, ChatGPT, singularity, OpenAI, AItools)
 │   └── betalist.js          # BetaList new startups (via Tabstack extract)
 ├── services/
-│   ├── scanner.js           # Concurrent scan orchestration + auto-enrich + auto-report pipeline
+│   ├── scanner.js           # Concurrent scan orchestration + auto-enrich + URL fix + auto-report pipeline
 │   ├── extractor.js         # Tabstack extraction + product URL resolution + classifier integration
 │   ├── classifier.js        # LLM startup classification (gpt-4o-mini)
-│   ├── enricher.js          # Tabstack /research enrichment + name validation + dead domain detection
+│   ├── enricher.js          # Tabstack /research enrichment + name validation + bad URL override + dead domain detection
 │   ├── entities.js          # Entity resolution + vector dedup
 │   ├── reports.js           # New-discoveries report generation, URL verification, dark-theme HTML
 │   └── progress.js          # In-memory job progress tracking for dashboard polling
@@ -227,9 +227,10 @@ Require `Authorization: Bearer <ADMIN_TOKEN>` header (skipped in dev if token is
 
 | Endpoint | Method | Description |
 | --- | --- | --- |
-| `/api/admin/scan/run` | POST | Trigger full pipeline: scan → enrich → report (returns immediately, runs in background) |
+| `/api/admin/scan/run` | POST | Trigger full pipeline: scan → enrich → URL fix → report (returns immediately, runs in background) |
 | `/api/admin/report/generate` | POST | Generate a report manually (awaits enrichment, then builds HTML) |
 | `/api/admin/enrich` | POST | Manually trigger enrichment. Query: `?limit=15` |
+| `/api/admin/fix-urls` | POST | Bulk-sync entity `website_url` from enrichment data where they differ |
 
 ---
 
@@ -279,6 +280,14 @@ All sources run concurrently during scans. Reddit fetches from all 10 subreddits
 │  3. Name-match validation (Levenshtein ≥ 0.7)                │
 │  4. Research URL always preferred over extraction URL        │
 │  5. Dead/parked domain auto-delist                           │
+│  6. Override bad website_url even if name match fails        │
+└───────────────────────────┬──────────────────────────────────┘
+                            │ automatic
+                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│  STEP 2.5: URL FIX                                           │
+│  Sync website_url from enrichment for all entities with      │
+│  missing or invalid URLs                                     │
 └───────────────────────────┬──────────────────────────────────┘
                             │ automatic
                             ▼
@@ -335,12 +344,15 @@ All classified AI startups are enriched via Tabstack's `/research` SSE endpoint 
 
 **Verification penalty:** entities that were enriched but have no web presence (no website URL, no real domain, and research found nothing) get their score reduced to 10%.
 
-**URL handling:** when enrichment finds a website URL and the name matches, it **always updates** the entity's `website_url`. Research performs a thorough web search and is more reliable than the initial single-page extraction, which can pick up a plausible-looking but incorrect domain.
+**URL handling:** when enrichment finds a website URL and the name matches, it **always updates** the entity's `website_url`. Even when the name doesn't match, if the current `website_url` is invalid (e.g. an RFC link, aggregator URL, or missing), the enriched URL still overrides it. Research performs a thorough web search and is more reliable than the initial single-page extraction, which can pick up a plausible-looking but incorrect domain.
+
+**Post-scan URL fix pass:** after enrichment, the pipeline scans all enriched entities and syncs `website_url` from `enrichment.metrics.website` for any entities with missing or invalid URLs. This catches cases where the enricher found the right URL but couldn't apply it during enrichment (e.g. the entity was already enriched before the fix was deployed).
 
 **Enrichment runs:**
 - Automatically after each scan — up to 30 unenriched entities are enriched before report generation
 - During report generation — any remaining unenriched entities in the report set are enriched before the report is built
 - Manually via `POST /api/admin/enrich?limit=N`
+- Bulk URL fix via `POST /api/admin/fix-urls`
 
 Cost: ~1 Tabstack credit per `/research` call.
 
