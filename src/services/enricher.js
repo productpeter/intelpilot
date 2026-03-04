@@ -1,7 +1,7 @@
 import { research } from '../lib/tabstack.js';
 import { chatJson } from '../lib/openai.js';
 import { col } from '../db/mongo.js';
-import { isAggregatorUrl, isValidProductUrl } from './extractor.js';
+import { isValidProductUrl } from './extractor.js';
 import { startJob, updateJob, finishJob, failJob } from './progress.js';
 import { betterName } from '../lib/namefix.js';
 

@@ -1,5 +1,4 @@
 const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
 
 const PAGE_SIZE = 24;
 let currentPage = 1;

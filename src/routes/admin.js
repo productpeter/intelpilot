@@ -3,7 +3,6 @@ import { adminAuth } from '../middleware/auth.js';
 import { runFullScan } from '../services/scanner.js';
 import { generateWeeklyReport } from '../services/reports.js';
 import { enrichEntities } from '../services/enricher.js';
-import { isValidProductUrl } from '../services/extractor.js';
 import { col } from '../db/mongo.js';
 import { getAllJobs } from '../services/progress.js';
 import { betterName } from '../lib/namefix.js';

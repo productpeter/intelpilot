@@ -21,7 +21,3 @@ const sources = [
 export function getAllSources() {
   return sources;
 }
-
-export function getSourceByName(name) {
-  return sources.find((s) => s.name === name);
-}

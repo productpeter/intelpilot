@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import config from '../config/index.js';
 
 let s3;
@@ -28,13 +28,6 @@ export async function uploadSnapshot(key, body, contentType = 'text/html') {
     }),
   );
   return key;
-}
-
-export async function getSnapshot(key) {
-  const result = await getClient().send(
-    new GetObjectCommand({ Bucket: config.r2.bucket, Key: key }),
-  );
-  return result.Body;
 }
 
 export function buildSnapshotKey(url, timestamp) {

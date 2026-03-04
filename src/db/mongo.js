@@ -51,10 +51,3 @@ async function ensureIndexes(database) {
   console.log('MongoDB indexes ensured');
 }
 
-export async function closeDb() {
-  if (client) {
-    await client.close();
-    client = null;
-    db = null;
-  }
-}

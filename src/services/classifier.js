@@ -1,6 +1,6 @@
 import { chatJson } from '../lib/openai.js';
 import { col } from '../db/mongo.js';
-import { isAggregatorUrl, isValidProductUrl } from './extractor.js';
+import { isValidProductUrl } from './extractor.js';
 
 const SYSTEM_PROMPT = `You are an AI startup classifier. Given information about an entity discovered from the web, determine whether it represents an actual AI/ML startup or product.
 

@@ -32,10 +32,6 @@ export function failJob(type, message) {
   }
 }
 
-export function getJob(type) {
-  return jobs[type] || null;
-}
-
 export function getAllJobs() {
   return { ...jobs };
 }
