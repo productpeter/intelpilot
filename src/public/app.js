@@ -456,6 +456,7 @@ let pipelineTimer = null;
 let pipelineScanDone = false;
 let pipelineEnrichDone = false;
 let pipelineReportDone = false;
+let pipelineEmptyJobPolls = 0;
 
 function showPipeline() {
   $('#pipeline-progress').hidden = false;
@@ -475,6 +476,7 @@ function resetPipeline() {
   pipelineScanDone = false;
   pipelineEnrichDone = false;
   pipelineReportDone = false;
+  pipelineEmptyJobPolls = 0;
   setStepState('scan', 'active', 'starting…');
   setStepState('enrich', '', 'waiting');
   setStepState('report', '', 'waiting');
@@ -507,6 +509,7 @@ async function pollPipeline() {
     if (pipelineScanDone && !pipelineEnrichDone) {
       const ej = jobs.enrich;
       if (ej?.status === 'running') {
+        pipelineEmptyJobPolls = 0;
         setStepState('enrich', 'active', `${ej.completed || 0}/${ej.total || '?'} done`);
       } else if (ej?.status === 'done') {
         setStepState('enrich', 'done', ej.message || 'complete');
@@ -516,13 +519,20 @@ async function pollPipeline() {
         setStepState('enrich', 'error', 'failed');
         pipelineEnrichDone = true;
       } else if (!ej) {
-        setStepState('enrich', 'active', 'starting…');
+        pipelineEmptyJobPolls++;
+        if (pipelineEmptyJobPolls > 6) {
+          setStepState('enrich', 'done', 'complete');
+          pipelineEnrichDone = true;
+        } else {
+          setStepState('enrich', 'active', 'starting…');
+        }
       }
     }
 
     if (pipelineScanDone && pipelineEnrichDone && !pipelineReportDone) {
       const rj = jobs.report;
       if (rj?.status === 'running') {
+        pipelineEmptyJobPolls = 0;
         setStepState('report', 'active', rj.message || 'generating…');
       } else if (rj?.status === 'done') {
         setStepState('report', 'done', rj.message || 'complete');
@@ -533,7 +543,15 @@ async function pollPipeline() {
         setStepState('report', 'error', 'failed');
         pipelineReportDone = true;
       } else if (!rj) {
-        setStepState('report', 'active', 'starting…');
+        pipelineEmptyJobPolls++;
+        if (pipelineEmptyJobPolls > 6) {
+          setStepState('report', 'done', 'complete');
+          pipelineReportDone = true;
+          loadHistory();
+          loadEntities();
+        } else {
+          setStepState('report', 'active', 'starting…');
+        }
       }
     }
 
