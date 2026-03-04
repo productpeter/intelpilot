@@ -1,6 +1,10 @@
 import { extractJson } from '../lib/tabstack.js';
 
-const PH_URL = 'https://www.producthunt.com/leaderboard/daily/2026/2/28';
+function getPHUrl() {
+  const d = new Date();
+  return `https://www.producthunt.com/leaderboard/daily/${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 
 const SCHEMA = {
   type: 'object',
@@ -37,7 +41,7 @@ export default {
   type: 'html',
 
   async fetchCandidates() {
-    const result = await extractJson(PH_URL, SCHEMA, { nocache: true });
+    const result = await extractJson(getPHUrl(), SCHEMA, { nocache: true });
     const products = result.products || [];
 
     return products.map((p) => {

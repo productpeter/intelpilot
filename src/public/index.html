@@ -3,106 +3,116 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IntelPilot Dashboard</title>
+<title>IntelPilot — AI Startup Intelligence</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="header-top">
-      <div>
-        <h1>IntelPilot</h1>
-        <p class="subtitle">AI Startup Intelligence System</p>
+<nav class="navbar">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <span class="logo">◆</span>
+      <span class="brand-name">IntelPilot</span>
+    </div>
+    <div class="nav-status" id="status">
+      <span class="pulse"></span>
+      <span class="status-text">Connecting…</span>
+    </div>
+    <div class="nav-actions">
+      <div class="nav-btn-wrap">
+        <button id="btn-scan" class="nav-btn scan">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          Scan for New Startups
+          <span class="help-btn" role="button" aria-label="What does Scan do?">?</span>
+        </button>
+        <div class="btn-tooltip">Crawl all sources for new AI startups, auto-enrich discovered entities, then generate a report.</div>
       </div>
-      <div class="status" id="status">
-        <span class="dot"></span>
-        <span class="status-text">Checking...</span>
+      <div class="report-dropdown-wrap">
+        <button id="link-report" class="nav-btn ghost" onclick="openReportModal('/report')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Newest Startup Report
+        </button>
+        <button class="nav-btn ghost report-history-toggle" id="btn-history-toggle">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Past Reports
+        </button>
+        <div class="report-history-dropdown" id="report-history-dropdown" hidden>
+          <div class="rhd-header">Past Reports</div>
+          <div class="rhd-list" id="history-list">
+            <p class="muted">Loading…</p>
+          </div>
+        </div>
       </div>
     </div>
-  </header>
+  </div>
+  <div class="nav-feedback" id="nav-feedback"></div>
+  <div class="pipeline-progress" id="pipeline-progress" hidden>
+    <div class="pipeline-steps">
+      <div class="pipeline-step" id="step-scan"><span class="step-icon">1</span><span class="step-label">Scanning sources</span><span class="step-detail" id="step-scan-detail"></span></div>
+      <div class="pipeline-step" id="step-enrich"><span class="step-icon">2</span><span class="step-label">Enriching entities</span><span class="step-detail" id="step-enrich-detail"></span></div>
+      <div class="pipeline-step" id="step-report"><span class="step-icon">3</span><span class="step-label">Generating report</span><span class="step-detail" id="step-report-detail"></span></div>
+    </div>
+  </div>
+</nav>
 
-  <section class="tech-stack">
-    <h2>Powered By</h2>
-    <div class="tech-grid">
-      <div class="tech-item">
-        <span class="tech-label">Web Extraction</span>
-        <span class="tech-name">Tabstack API</span>
-        <span class="tech-desc">Headless browsing, structured extraction, and deep web research</span>
-      </div>
-      <div class="tech-item">
-        <span class="tech-label">AI Classification</span>
-        <span class="tech-name">OpenAI GPT-4o-mini</span>
-        <span class="tech-desc">LLM-powered startup detection, entity naming, and metric extraction</span>
-      </div>
-      <div class="tech-item">
-        <span class="tech-label">Embeddings</span>
-        <span class="tech-name">OpenAI text-embedding-3-large</span>
-        <span class="tech-desc">3072-dim vectors for entity deduplication via cosine similarity</span>
-      </div>
-      <div class="tech-item">
-        <span class="tech-label">Database</span>
-        <span class="tech-name">MongoDB Atlas</span>
-        <span class="tech-desc">Primary data store with Atlas Vector Search for semantic dedup</span>
-      </div>
-      <div class="tech-item">
-        <span class="tech-label">Object Storage</span>
-        <span class="tech-name">Cloudflare R2</span>
-        <span class="tech-desc">S3-compatible storage for page snapshots and artifacts</span>
-      </div>
-      <div class="tech-item">
-        <span class="tech-label">Backend</span>
-        <span class="tech-name">Node.js + Express</span>
-        <span class="tech-desc">REST API with scheduled cron jobs for automated scanning</span>
-      </div>
-      <div class="tech-item">
-        <span class="tech-label">Hosting</span>
-        <span class="tech-name">Railway</span>
-        <span class="tech-desc">Always-on deployment with auto-deploy from GitHub</span>
-      </div>
-      <div class="tech-item">
-        <span class="tech-label">Sources</span>
-        <span class="tech-name">8+ Channels</span>
-        <span class="tech-desc">Reddit, Hacker News, Product Hunt, BetaList, RSS/TLDR AI</span>
-      </div>
+<main class="main">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <h2 class="page-title">Discovered Startups</h2>
+      <span class="entity-count" id="entity-count"></span>
     </div>
+    <div class="toolbar-right">
+      <div class="search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="search-input" placeholder="Search startups…" autocomplete="off">
+      </div>
+      <select id="filter-category" class="select-filter">
+        <option value="">All Categories</option>
+      </select>
+      <select id="sort-select" class="select-filter">
+        <option value="revenue_first">Revenue First</option>
+        <option value="updated_at">Recently Updated</option>
+        <option value="created_at">Newest First</option>
+        <option value="name">Name A–Z</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="entity-grid" id="entity-grid">
+    <div class="grid-loading">Loading startups…</div>
+  </div>
+
+  <div class="pagination" id="pagination"></div>
+
+  <section class="tech-bar">
+    <span class="tech-tag">Tabstack API</span>
+    <span class="tech-tag">OpenAI GPT-4o-mini</span>
+    <span class="tech-tag">MongoDB Atlas</span>
+    <span class="tech-tag">Cloudflare R2</span>
+    <span class="tech-tag">Node.js + Express</span>
+    <span class="tech-tag">Railway</span>
   </section>
+</main>
 
-  <section class="actions">
-    <div class="action-card">
-      <h3>Scan Sources</h3>
-      <p>Fetch new candidates from all sources (Reddit, HN, Product Hunt, RSS, BetaList)</p>
-      <button id="btn-scan" class="btn btn-scan">Run Scan</button>
-      <div class="action-status" id="scan-status"></div>
-    </div>
-    <div class="action-card">
-      <h3>Generate Report</h3>
-      <p>Score, enrich, and rank all AI startups into a new report</p>
-      <button id="btn-report" class="btn btn-report">Generate Report</button>
-      <div class="action-status" id="report-status"></div>
-    </div>
-    <div class="action-card">
-      <h3>Enrich Entities</h3>
-      <p>Run Tabstack research on unenriched entities for deeper data</p>
-      <button id="btn-enrich" class="btn btn-enrich">Run Enrichment</button>
-      <div class="action-status" id="enrich-status"></div>
-    </div>
-  </section>
-
-  <section class="latest-report" id="latest-section">
-    <h2>Latest Report</h2>
-    <div class="latest-card" id="latest-card">
-      <p class="muted">Loading...</p>
-    </div>
-  </section>
-
-  <section class="report-history">
-    <h2>Report History</h2>
-    <div id="history-list">
-      <p class="muted">Loading...</p>
-    </div>
-  </section>
-
+<div class="modal-overlay" id="modal-overlay" hidden>
+  <div class="modal" id="modal">
+    <button class="modal-close" id="modal-close">✕</button>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
 </div>
+
+<div class="report-modal-overlay" id="report-modal-overlay" hidden>
+  <div class="report-modal">
+    <div class="report-modal-header">
+      <span class="report-modal-title">Intelligence Report</span>
+      <div class="report-modal-actions">
+        <a id="report-modal-newtab" href="#" target="_blank" class="report-modal-btn">Open in new tab ↗</a>
+        <button class="report-modal-close" id="report-modal-close">✕</button>
+      </div>
+    </div>
+    <iframe id="report-modal-iframe" class="report-modal-iframe" src="about:blank"></iframe>
+  </div>
+</div>
+
 <script src="/app.js"></script>
 </body>
 </html>

@@ -1,45 +1,63 @@
 import { col } from '../db/mongo.js';
 import { enrichEntities } from './enricher.js';
-import { isAggregatorUrl, isValidProductUrl } from './extractor.js';
+import { isValidProductUrl } from './extractor.js';
 import { startJob, updateJob, finishJob, failJob } from './progress.js';
-
-const SIGNAL_WEIGHTS = {
-  revenue_claim: 25,
-  funding_raised: 20,
-  growth_rate: 15,
-  customer_count_claim: 10,
-  user_count: 10,
-  team_size: 5,
-  pricing_present: 7,
-  launch_announcement: 4,
-  trend_indicator: 1,
-};
-
-
 
 export async function generateWeeklyReport() {
   const now = new Date();
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const fallback = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  console.log('[Reports] Generating weekly report…');
+  console.log('[Reports] Generating new discoveries report…');
   const job = startJob('report');
-  updateJob('report', { message: 'Loading entities…' });
+  updateJob('report', { message: 'Finding cutoff from last report…' });
+
+  const lastReport = await col('reports')
+    .findOne({}, { sort: { generated_at: -1 }, projection: { generated_at: 1 } });
+  const cutoff = lastReport?.generated_at || fallback;
+
+  console.log(`[Reports] Cutoff: ${cutoff.toISOString()}`);
+  updateJob('report', { message: 'Loading new entities…' });
 
   const entities = await col('entities')
     .find({
-      updated_at: { $gte: oneWeekAgo },
+      created_at: { $gte: cutoff },
       'classification.is_startup': true,
       'classification.clean_name': { $ne: null },
     })
-    .sort({ updated_at: -1 })
-    .limit(500)
+    .sort({ created_at: -1 })
     .toArray();
 
-  const scoredItems = [];
+  console.log(`[Reports] Found ${entities.length} new startups since ${cutoff.toISOString()}`);
+
+  const toEnrich = entities.filter((e) => !e.enrichment);
+  if (toEnrich.length > 0) {
+    console.log(`[Reports] Awaiting enrichment for ${toEnrich.length} entities…`);
+    updateJob('report', { message: `Enriching ${toEnrich.length} entities…` });
+    await enrichEntities(toEnrich);
+  }
+
+  updateJob('report', { message: `Building report for ${entities.length} entities…` });
+
+  const reportItems = [];
 
   for (const entity of entities) {
+    const fresh = toEnrich.some((e) => e._id.equals(entity._id))
+      ? await col('entities').findOne({ _id: entity._id })
+      : entity;
+    if (!fresh) continue;
+
+    const discoveries = await col('discoveries')
+      .find({ entity_id: fresh._id })
+      .sort({ discovered_at: -1 })
+      .limit(20)
+      .toArray();
+
+    const sourceLabels = buildSourceLabels(discoveries);
+
     const signals = await col('signals')
-      .find({ entity_id: entity._id, captured_at: { $gte: oneWeekAgo } })
+      .find({ entity_id: fresh._id })
+      .sort({ captured_at: -1 })
+      .limit(30)
       .toArray();
 
     const evidenceIds = [...new Set(signals.map((s) => s.evidence_id).filter(Boolean))];
@@ -47,88 +65,23 @@ export async function generateWeeklyReport() {
       ? await col('evidence').find({ _id: { $in: evidenceIds } }).toArray()
       : [];
 
-    const sourceCount = new Set(signals.map((s) => s.source_id?.toString())).size;
-
-    const hasRevenue = signals.some((s) => s.signal_type === 'revenue_claim');
-
-    let score = 0;
-    for (const sig of signals) {
-      score += (SIGNAL_WEIGHTS[sig.signal_type] || 1) * sig.confidence;
-    }
-    if (hasRevenue) score += 100;
-    score += sourceCount * 3;
-    const daysSinceUpdate = (now - entity.updated_at) / (1000 * 60 * 60 * 24);
-    score += Math.max(0, 7 - daysSinceUpdate);
-
-    const avgConfidence = signals.length
-      ? signals.reduce((sum, s) => sum + s.confidence, 0) / signals.length
-      : 0;
-
-    const hasRealDomain = entity.canonical_domain && !entity.canonical_domain.startsWith('reddit-');
-    const hasWebsite = !!entity.website_url;
-    const webVerified = entity.enrichment?.web_verified === true;
-    const enrichedButEmpty = entity.enrichment && !webVerified;
-
-    if (enrichedButEmpty && !hasWebsite && !hasRealDomain) {
-      score *= 0.1;
-    }
-
-    scoredItems.push({ entity, signals, evidence: evidenceDocs, score, sourceCount, avgConfidence, hasRevenue });
-  }
-
-  updateJob('report', { message: `Scored ${scoredItems.length} entities, ranking…` });
-
-  scoredItems.sort((a, b) => {
-    if (a.hasRevenue !== b.hasRevenue) return a.hasRevenue ? -1 : 1;
-    return b.score - a.score;
-  });
-
-  const toEnrich = scoredItems
-    .filter((item) => !item.entity.enrichment)
-    .map((item) => item.entity);
-
-  if (toEnrich.length > 0) {
-    console.log(`[Reports] Awaiting enrichment for ${toEnrich.length} entities…`);
-    updateJob('report', { message: `Enriching ${toEnrich.length} entities…` });
-    await enrichEntities(toEnrich);
-
-    for (const item of scoredItems) {
-      const fresh = await col('entities').findOne({ _id: item.entity._id });
-      if (fresh) item.entity = fresh;
-    }
-  }
-
-  const reportReady = scoredItems.filter((item) => {
-    const entity = item.entity;
-    const hasWebsite = !!entity.website_url && isValidProductUrl(entity.website_url);
-    const hasEnrichmentWebsite = entity.enrichment?.metrics?.website &&
-      isValidProductUrl(entity.enrichment.metrics.website.startsWith('http') ? entity.enrichment.metrics.website : `https://${entity.enrichment.metrics.website}`);
-    const hasRealDomain = entity.canonical_domain && !entity.canonical_domain.startsWith('reddit-') && entity.canonical_domain.includes('.');
-    if (hasWebsite || hasEnrichmentWebsite || hasRealDomain) return true;
-    if (entity.enrichment && !hasWebsite && !hasEnrichmentWebsite && !hasRealDomain) {
-      console.log(`[Reports] Excluding "${entity.name}" — enriched but no discoverable website`);
-      return false;
-    }
-    return true;
-  });
-
-  const topItems = reportReady.slice(0, 50);
-
-  const reportItems = topItems.map((item) => {
     const pick = (type) => {
-      const found = item.signals.filter((s) => s.signal_type === type);
+      const found = signals.filter((s) => s.signal_type === type);
       return found.length ? [...new Set(found.map((s) => s.value_text))].join('; ') : null;
     };
 
-    const em = item.entity.enrichment?.metrics;
-    const category = item.entity.classification?.category;
+    const em = fresh.enrichment?.metrics;
+    const category = fresh.classification?.category;
+    const firstDiscovery = discoveries.length
+      ? discoveries[discoveries.length - 1].discovered_at
+      : fresh.created_at;
 
-    return {
-      entity_id: item.entity._id,
-      entity_name: item.entity.name,
-      domain: item.entity.canonical_domain,
-      description: item.entity.description,
-      tags: item.entity.tags,
+    reportItems.push({
+      entity_id: fresh._id,
+      entity_name: fresh.name,
+      domain: fresh.canonical_domain,
+      description: fresh.description,
+      tags: fresh.tags,
       category,
       revenue: pick('revenue_claim') || em?.revenue,
       funding: pick('funding_raised') || em?.funding,
@@ -136,30 +89,29 @@ export async function generateWeeklyReport() {
       users: pick('user_count') || pick('customer_count_claim') || em?.user_count,
       team: pick('team_size') || em?.team_size,
       notable: em?.notable || null,
-      website: resolveReportWebsite(item.entity, em, item.evidence),
-      score: Math.round(item.score * 100) / 100,
-      source_count: item.sourceCount,
-      avg_confidence: Math.round(item.avgConfidence * 100) / 100,
-      signals: item.signals.map((s) => ({
+      website: resolveReportWebsite(fresh, em, evidenceDocs),
+      source_labels: sourceLabels,
+      discovered_at: firstDiscovery,
+      signals: signals.map((s) => ({
         type: s.signal_type,
         value: s.value_text,
         confidence: s.confidence,
       })),
-      evidence: item.evidence.slice(0, 3).map((e) => ({
+      evidence: evidenceDocs.slice(0, 3).map((e) => ({
         url: e.url,
         snippet: e.snippet,
         type: e.type,
       })),
-    };
-  });
+    });
+  }
 
   updateJob('report', { message: `Building HTML for ${reportItems.length} items…` });
 
-  const reportJson = { period_start: oneWeekAgo, period_end: now, items: reportItems };
+  const reportJson = { period_start: cutoff, period_end: now, items: reportItems };
   const reportHtml = buildReportHtml(reportJson);
 
   const scanRuns = await col('scan_runs')
-    .find({ started_at: { $gte: oneWeekAgo } })
+    .find({ started_at: { $gte: cutoff } })
     .toArray();
 
   const stats = {
@@ -170,7 +122,7 @@ export async function generateWeeklyReport() {
   };
 
   const report = {
-    period_start: oneWeekAgo,
+    period_start: cutoff,
     period_end: now,
     generated_at: new Date(),
     items: reportItems,
@@ -181,8 +133,33 @@ export async function generateWeeklyReport() {
 
   const { insertedId } = await col('reports').insertOne(report);
   console.log(`[Reports] Report generated: ${insertedId} (${reportItems.length} items)`);
-  finishJob('report', `${reportItems.length} startups in report`);
+  finishJob('report', `${reportItems.length} new startups in report`);
   return report;
+}
+
+function buildSourceLabels(discoveries) {
+  const labels = new Set();
+  for (const d of discoveries) {
+    const meta = d.meta || {};
+    if (meta.subreddit) {
+      labels.add(`r/${meta.subreddit}`);
+    } else if (meta.feed_label) {
+      labels.add(meta.feed_label);
+    } else if (meta.source_page) {
+      labels.add(meta.source_page);
+    } else {
+      const url = d.candidate_url || '';
+      if (url.includes('producthunt.com')) labels.add('Product Hunt');
+      else if (url.includes('news.ycombinator.com')) labels.add('Hacker News');
+      else if (url.includes('betalist.com')) labels.add('BetaList');
+      else if (url.includes('techcrunch.com')) labels.add('TechCrunch');
+      else if (url.includes('futuretools.io')) labels.add('FutureTools');
+      else if (url.includes('toolify.ai')) labels.add('Toolify');
+      else if (url.includes('aitools.fyi')) labels.add('AITools.fyi');
+      else if (url.includes('reddit.com')) labels.add('Reddit');
+    }
+  }
+  return [...labels];
 }
 
 function resolveReportWebsite(entity, enrichmentMetrics, evidenceDocs) {
@@ -220,8 +197,17 @@ function buildReportHtml(reportJson) {
       year: 'numeric',
     });
 
+  const fmtFull = (d) =>
+    new Date(d).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
   const itemsHtml = items
-    .map((item, i) => {
+    .map((item) => {
       const signalsHtml = item.signals
         .map(
           (s) =>
@@ -240,13 +226,17 @@ function buildReportHtml(reportJson) {
         ? (item.website.startsWith('http') ? item.website : `https://${item.website}`)
         : null;
 
+      const sourceBadges = (item.source_labels || [])
+        .map((s) => `<span class="source">${esc(s)}</span>`)
+        .join(' ');
+
       return `
       <div class="card">
         <div class="card-hd">
-          <h3>${i + 1}. ${websiteUrl ? `<a href="${esc(websiteUrl)}" target="_blank">${esc(item.entity_name)}</a>` : esc(item.entity_name)}</h3>
+          <h3>${websiteUrl ? `<a href="${esc(websiteUrl)}" target="_blank">${esc(item.entity_name)}</a>` : esc(item.entity_name)}</h3>
           ${item.category ? `<span class="category">${esc(item.category)}</span>` : ''}
-          <span class="score">Score ${item.score}</span>
         </div>
+        ${sourceBadges ? `<div class="sources">${sourceBadges}</div>` : ''}
         ${websiteUrl ? `<div class="website"><a href="${esc(websiteUrl)}" target="_blank">${esc(websiteUrl)}</a></div>` : ''}
         <div class="badges">
         ${item.revenue ? `<span class="badge revenue">Revenue: ${esc(item.revenue)}</span>` : ''}
@@ -260,7 +250,7 @@ function buildReportHtml(reportJson) {
         ${item.tags?.length ? `<div class="tags">${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join(' ')}</div>` : ''}
         <details><summary>Signals</summary><ul>${signalsHtml || '<li>None</li>'}</ul></details>
         <details><summary>Evidence</summary><ul>${evidenceHtml || '<li>None</li>'}</ul></details>
-        <div class="meta">Sources: ${item.source_count} · Avg confidence: ${Math.round(item.avg_confidence * 100)}%</div>
+        <div class="meta">Discovered ${fmtFull(item.discovered_at)}</div>
       </div>`;
     })
     .join('');
@@ -270,51 +260,82 @@ function buildReportHtml(reportJson) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IntelPilot Weekly Report</title>
+<title>IntelPilot — New AI Startup Discoveries</title>
 <style>
+:root{
+  --bg:#0a0a0f;--surface:#12121a;--surface-2:#1a1a26;--surface-3:#222233;
+  --border:#2a2a3a;--border-light:#33334a;--text:#e8e8f0;--text-dim:#8888a0;--text-muted:#55556a;
+  --accent:#6366f1;--accent-dim:rgba(99,102,241,.15);
+  --green:#22c55e;--green-dim:rgba(34,197,94,.12);
+  --yellow:#eab308;--yellow-dim:rgba(234,179,8,.12);
+  --red:#ef4444;--red-dim:rgba(239,68,68,.12);
+  --blue:#3b82f6;--blue-dim:rgba(59,130,246,.12);
+  --purple:#a855f7;--purple-dim:rgba(168,85,247,.12);
+  --cyan:#06b6d4;
+  --radius:10px;--radius-sm:6px;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f5f7;color:#1a1a2e;line-height:1.6}
-.wrap{max-width:920px;margin:0 auto;padding:2rem 1rem}
-header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:2rem;border-radius:12px;margin-bottom:2rem}
-header h1{font-size:1.75rem;margin-bottom:.25rem}
-header p{opacity:.8;font-size:.95rem}
-.card{background:#fff;border-radius:10px;padding:1.5rem;margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-.card-hd{display:flex;align-items:baseline;gap:.75rem;flex-wrap:wrap;margin-bottom:.4rem}
-.card-hd h3{font-size:1.1rem;color:#1a1a2e}
-.domain{color:#666;font-size:.82rem}
-.score{background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:12px;font-size:.78rem;font-weight:600}
-.category{background:#ede7f6;color:#4527a0;padding:2px 8px;border-radius:12px;font-size:.76rem;font-weight:500}
-.website{margin-bottom:.5rem}.website a{color:#1976d2;font-size:.84rem}
-.notable{color:#666;font-size:.85rem;font-style:italic;margin-bottom:.6rem}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.wrap{max-width:960px;margin:0 auto;padding:2rem 1.25rem}
+header{background:var(--surface-2);border:1px solid var(--border);padding:2rem 2rem 1.5rem;border-radius:var(--radius);margin-bottom:1.5rem;position:relative;overflow:hidden}
+header::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--cyan),var(--purple))}
+header h1{font-size:1.6rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.25rem}
+header .subtitle{color:var(--text-dim);font-size:.88rem}
+header .stat{display:inline-block;margin-top:.75rem;padding:.3rem .8rem;background:var(--accent-dim);color:var(--accent);border-radius:20px;font-size:.82rem;font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:.75rem;transition:border-color .15s}
+.card:hover{border-color:var(--border-light)}
+.card-hd{display:flex;align-items:baseline;gap:.75rem;flex-wrap:wrap;margin-bottom:.5rem}
+.card-hd h3{font-size:1.05rem;font-weight:600;color:var(--text)}
+.card-hd h3 a{color:var(--accent);text-decoration:none;transition:color .15s}
+.card-hd h3 a:hover{color:#818cf8}
+.sources{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:.5rem}
+.source{background:var(--green-dim);color:var(--green);padding:2px 10px;border-radius:12px;font-size:.72rem;font-weight:600;border:1px solid rgba(34,197,94,.2)}
+.category{background:var(--purple-dim);color:var(--purple);padding:2px 8px;border-radius:12px;font-size:.74rem;font-weight:500;border:1px solid rgba(168,85,247,.2)}
+.website{margin-bottom:.5rem}
+.website a{color:var(--blue);font-size:.82rem;text-decoration:none;opacity:.8;transition:opacity .15s}
+.website a:hover{opacity:1;text-decoration:underline}
+.notable{color:var(--text-dim);font-size:.84rem;font-style:italic;margin-bottom:.6rem;padding-left:.5rem;border-left:2px solid var(--border-light)}
 .badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.6rem}
-.badge{padding:4px 12px;border-radius:8px;font-size:.82rem;font-weight:600;display:inline-block}
-.revenue{background:#fff3e0;color:#e65100}
-.funding{background:#e8eaf6;color:#283593}
-.users{background:#e0f2f1;color:#00695c}
-.growth{background:#fce4ec;color:#c62828}
-.team{background:#f3e5f5;color:#6a1b9a}
-.desc{color:#555;margin-bottom:.6rem}
+.badge{padding:4px 12px;border-radius:var(--radius-sm);font-size:.8rem;font-weight:600;display:inline-block;border:1px solid transparent}
+.revenue{background:rgba(234,179,8,.1);color:var(--yellow);border-color:rgba(234,179,8,.2)}
+.funding{background:var(--blue-dim);color:var(--blue);border-color:rgba(59,130,246,.2)}
+.users{background:rgba(6,182,212,.1);color:var(--cyan);border-color:rgba(6,182,212,.2)}
+.growth{background:var(--red-dim);color:var(--red);border-color:rgba(239,68,68,.2)}
+.team{background:var(--purple-dim);color:var(--purple);border-color:rgba(168,85,247,.2)}
+.desc{color:var(--text-dim);font-size:.88rem;margin-bottom:.6rem;line-height:1.5}
 .tags{margin-bottom:.6rem}
-.tag{display:inline-block;background:#e3f2fd;color:#1565c0;padding:2px 10px;border-radius:12px;font-size:.76rem;margin:2px}
+.tag{display:inline-block;background:var(--surface-3);color:var(--text-dim);padding:2px 10px;border-radius:12px;font-size:.74rem;margin:2px;border:1px solid var(--border)}
 details{margin-bottom:.4rem}
-summary{font-weight:600;font-size:.88rem;cursor:pointer;color:#444}
-ul{list-style:none;padding-left:0;font-size:.88rem}
-li{padding:3px 0}
-.conf{color:#999;font-size:.78rem}
-a{color:#1976d2;text-decoration:none}
-em{color:#777;font-size:.84rem}
-.meta{margin-top:.6rem;padding-top:.6rem;border-top:1px solid #eee;font-size:.8rem;color:#888}
-footer{text-align:center;color:#aaa;font-size:.82rem;margin-top:2rem}
+summary{font-weight:600;font-size:.85rem;cursor:pointer;color:var(--text-dim);padding:.3rem 0;transition:color .15s}
+summary:hover{color:var(--text)}
+details ul{padding:.5rem 0 .5rem .25rem}
+ul{list-style:none;padding-left:0;font-size:.85rem}
+li{padding:4px 0;color:var(--text-dim);border-bottom:1px solid var(--border);line-height:1.45}
+li:last-child{border-bottom:none}
+.conf{color:var(--text-muted);font-size:.76rem}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+em{color:var(--text-muted);font-size:.82rem}
+.meta{margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border);font-size:.78rem;color:var(--text-muted)}
+footer{text-align:center;color:var(--text-muted);font-size:.8rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+.empty{text-align:center;padding:3rem 1rem;color:var(--text-dim);font-size:.95rem}
+@media(max-width:640px){
+  .wrap{padding:1rem .75rem}
+  header{padding:1.25rem}
+  .card{padding:1rem}
+  .badges{gap:4px}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>IntelPilot Weekly Intelligence Report</h1>
-    <p>${fmt(period_start)} – ${fmt(period_end)} · ${items.length} entities tracked</p>
+    <h1>New AI Startup Discoveries</h1>
+    <p class="subtitle">Since ${fmt(period_start)}</p>
+    <span class="stat">${items.length} new startup${items.length !== 1 ? 's' : ''} found</span>
   </header>
-  ${itemsHtml || '<p>No items this week.</p>'}
-  <footer>Generated by IntelPilot on ${fmt(new Date())}</footer>
+  ${itemsHtml || '<p class="empty">No new startups discovered since last report.</p>'}
+  <footer>Generated by IntelPilot · ${fmt(new Date())}</footer>
 </div>
 </body>
 </html>`;

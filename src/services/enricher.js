@@ -7,19 +7,20 @@ import { startJob, updateJob, finishJob, failJob } from './progress.js';
 const EXTRACT_PROMPT = `You are a startup data extractor. Given research text about a startup/company, extract structured metrics. Respond with JSON:
 
 {
-  "matched_name": "The exact company/product name found in the research (so we can verify it matches the entity we searched for)",
-  "domain_status": "One of: active, parked, for_sale, dead, unknown. Set to 'parked' or 'for_sale' if the domain is listed on GoDaddy, Sedo, Afternic, or any domain marketplace. Set to 'dead' if the site is down, shows a default server page, or has no real content.",
-  "revenue": "Exact revenue/MRR/ARR figure if mentioned, or null",
-  "funding": "Total funding raised and round details, or null",
-  "team_size": "Team/employee count, or null",
-  "user_count": "User/customer count, or null",
-  "growth": "Growth rate or trajectory, or null",
-  "founded_year": "Year founded if mentioned, or null",
+  "matched_name": "The exact company/product name found in the research",
+  "domain_status": "One of: active, parked, for_sale, dead, unknown",
+  "revenue": "Single string with revenue/MRR/ARR figure, e.g. '$50K MRR' or '$1.2M ARR', or null",
+  "funding": "Single string summary, e.g. '$2M seed from Y Combinator' or '$50M Series A', or null",
+  "team_size": "Single string, e.g. '12 employees' or 'solo founder', or null",
+  "user_count": "Single string, e.g. '10K users' or '500 customers', or null",
+  "growth": "Single string, e.g. '30% MoM growth' or 'doubled in 3 months', or null",
+  "founded_year": "Year as a string, e.g. '2024', or null",
   "description": "A concise 1-2 sentence description of what the company does",
   "website": "Primary website URL if found, or null",
   "notable": "Any notable facts (e.g. YC batch, notable customers, awards)"
 }
 
+IMPORTANT: Every field must be either null or a plain string. NEVER return objects or arrays for any field. Summarize complex data into a single readable string.
 Only include data explicitly stated in the research. Do not guess or fabricate numbers.`;
 
 const ENRICHMENT_CONCURRENCY = 3;
@@ -81,6 +82,13 @@ async function enrichSingle(entity) {
   } catch (err) {
     console.warn(`[Enricher] Extraction failed for "${name}":`, err.message);
     return null;
+  }
+
+  for (const key of ['revenue', 'funding', 'team_size', 'user_count', 'growth', 'founded_year', 'notable']) {
+    const v = metrics[key];
+    if (v && typeof v === 'object') {
+      metrics[key] = v.total ? String(v.total) : JSON.stringify(v);
+    }
   }
 
   const matchedName = (metrics.matched_name || '').toLowerCase().trim();

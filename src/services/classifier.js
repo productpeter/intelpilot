@@ -16,7 +16,8 @@ Respond with JSON:
 
 Rules:
 - is_startup = true ONLY for AI/ML startups and products. The product must use AI, machine learning, LLMs, or related technology as a core feature.
-- is_startup = false for: non-AI startups (pure SaaS without AI, e-commerce, social networks, games without AI), news articles, opinion pieces, questions, personal blogs, established/well-known companies (Google, Microsoft, OpenAI, Anthropic, Meta, Amazon, Apple, Notion, Slack, Figma, Stripe, Vercel, Supabase, Datadog, Cloudflare, etc.), general discussions, portfolio/personal websites, agencies, consulting firms, defunct projects, posts where someone talks about building something but never names the product
+- is_startup = false for: non-AI startups (pure SaaS without AI, e-commerce, social networks, games without AI), news articles, opinion pieces, questions, personal blogs, publicly traded mega-corporations (Google, Microsoft, Meta, Amazon, Apple, Nvidia, Intel, IBM, Oracle, Salesforce, Adobe, Samsung, Sony), general discussions, portfolio/personal websites, agencies, consulting firms, defunct projects, posts where someone talks about building something but never names the product
+- is_startup = true for ALL private AI/ML companies regardless of size (e.g. Cursor, Perplexity, Midjourney, Anthropic, OpenAI, Cohere, Mistral, Scale AI, etc. are all valid)
 - clean_name MUST be a short product/company name (1-4 words max), NOT a Reddit post title or sentence
 - If you cannot determine a clear product name, set clean_name to null and is_startup to false
 - website_url: This MUST be the startup's OWN product website (e.g. "https://nowigetit.us", "https://linear.app", "https://cursor.com").

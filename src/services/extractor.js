@@ -162,7 +162,7 @@ export async function processDiscovery(discovery, sourceDoc) {
       ...(structured.tags || []),
       ...(discovery.meta?.topics || []),
       ...(discovery.meta?.tags || []),
-    ],
+    ].filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim()),
     identifiers: buildIdentifiers(url, structured),
     website_url: productWebsite,
   };
@@ -240,6 +240,20 @@ const AGGREGATOR_DOMAINS = new Set([
   'substack.com',
   'github.com',
   'gitlab.com',
+  'futuretools.io',
+  'toolify.ai',
+  'aitools.fyi',
+  'theresanaiforthat.com',
+  'alternativeto.net',
+  'g2.com',
+  'capterra.com',
+  'trustpilot.com',
+  'wikipedia.org',
+  'en.wikipedia.org',
+  'bloomberg.com',
+  'reuters.com',
+  'forbes.com',
+  'cnbc.com',
 ]);
 
 export function isAggregatorUrl(url) {

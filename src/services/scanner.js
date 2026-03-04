@@ -1,6 +1,8 @@
 import { col } from '../db/mongo.js';
 import { getAllSources } from '../sources/index.js';
 import { processDiscovery } from './extractor.js';
+import { enrichEntities } from './enricher.js';
+import { generateWeeklyReport } from './reports.js';
 
 const EXTRACTION_CONCURRENCY = 10;
 
@@ -19,7 +21,35 @@ export async function runFullScan() {
   );
 
   console.log('[Scanner] Full scan complete');
+
+  triggerPostScanPipeline().catch((err) =>
+    console.error('[Scanner] Post-scan pipeline error:', err.message),
+  );
+
   return results;
+}
+
+async function triggerPostScanPipeline() {
+  const unenriched = await col('entities')
+    .find({ 'classification.is_startup': true, enrichment: { $exists: false } })
+    .sort({ updated_at: -1 })
+    .limit(30)
+    .toArray();
+
+  if (unenriched.length) {
+    console.log(`[Scanner] Auto-enriching ${unenriched.length} entities…`);
+    await enrichEntities(unenriched);
+  } else {
+    console.log('[Scanner] No unenriched entities after scan');
+  }
+
+  console.log('[Scanner] Auto-generating report…');
+  try {
+    const report = await generateWeeklyReport();
+    console.log(`[Scanner] Report generated: ${report.items?.length || 0} items`);
+  } catch (err) {
+    console.error('[Scanner] Auto-report generation failed:', err.message);
+  }
 }
 
 export async function runSourceScan(source) {
