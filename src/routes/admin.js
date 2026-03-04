@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { ObjectId } from 'mongodb';
 import { adminAuth } from '../middleware/auth.js';
 import { runFullScan } from '../services/scanner.js';
 import { generateWeeklyReport } from '../services/reports.js';
@@ -173,6 +174,13 @@ router.post('/fix-urls', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+router.delete('/reports/empty', async (req, res) => {
+  const result = await col('reports').deleteMany({
+    $or: [{ items: { $size: 0 } }, { items: { $exists: false } }],
+  });
+  res.json({ deleted: result.deletedCount });
 });
 
 export default router;
