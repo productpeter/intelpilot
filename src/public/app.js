@@ -624,27 +624,34 @@ function escAttr(str) {
   return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/* Reports dropdown */
+/* Reports dropdown — move to body so it escapes nav stacking context */
+const _reportDD = $('#report-history-dropdown');
+document.body.appendChild(_reportDD);
+
 $('#btn-reports-toggle').addEventListener('click', (ev) => {
   ev.stopPropagation();
-  const dd = $('#report-history-dropdown');
-  const opening = dd.hidden;
-  dd.hidden = !dd.hidden;
+  const opening = _reportDD.hidden;
+  _reportDD.hidden = !_reportDD.hidden;
   if (opening) {
     loadHistory();
+    const rect = ev.currentTarget.getBoundingClientRect();
+    _reportDD.style.position = 'fixed';
+    _reportDD.style.top = `${rect.bottom + 6}px`;
     if (window.innerWidth <= 768) {
-      const rect = ev.currentTarget.getBoundingClientRect();
-      dd.style.top = `${rect.bottom + 6}px`;
+      _reportDD.style.left = '1rem';
+      _reportDD.style.right = '1rem';
+      _reportDD.style.width = 'calc(100vw - 2rem)';
     } else {
-      dd.style.top = '';
+      _reportDD.style.left = '';
+      _reportDD.style.right = `${window.innerWidth - rect.right}px`;
+      _reportDD.style.width = '340px';
     }
   }
 });
 
 document.addEventListener('click', (ev) => {
-  const dd = $('#report-history-dropdown');
-  if (!dd.hidden && !ev.target.closest('.report-dropdown-wrap')) {
-    dd.hidden = true;
+  if (!_reportDD.hidden && !ev.target.closest('.report-dropdown-wrap') && !ev.target.closest('#report-history-dropdown')) {
+    _reportDD.hidden = true;
   }
 });
 

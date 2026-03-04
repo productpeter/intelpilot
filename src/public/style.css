@@ -584,17 +584,14 @@ body {
 .report-history-dropdown[hidden] { display: none !important; }
 
 .report-history-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 0.4rem;
+  position: fixed;
   width: 340px;
   max-height: 380px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  z-index: 500;
+  z-index: 10000;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1030,8 +1027,7 @@ body {
   .nav-actions::before { content: ''; min-width: 1rem; flex-shrink: 0; }
   .nav-actions::after { content: ''; min-width: 1rem; flex-shrink: 0; }
   .nav-actions .nav-btn { white-space: nowrap; font-size: 0.72rem; padding: 0.35rem 0.6rem; flex-shrink: 0; }
-  .report-dropdown-wrap { flex-shrink: 0; position: static; }
-  .report-history-dropdown { position: fixed; width: calc(100vw - 2rem); max-width: 340px; left: 1rem; right: 1rem; top: auto; z-index: 9999; }
+  .report-dropdown-wrap { flex-shrink: 0; }
 
   .pipeline-progress {
     padding: 0.5rem 0;
