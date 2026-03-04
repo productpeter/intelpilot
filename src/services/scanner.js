@@ -69,6 +69,31 @@ async function triggerPostScanPipeline() {
     }
   }
 
+  const genericNames = await col('entities')
+    .find({
+      'classification.is_startup': true,
+      'enrichment.metrics.matched_name': { $ne: null },
+    })
+    .toArray();
+
+  let namesFixed = 0;
+  for (const e of genericNames) {
+    const researchName = (e.enrichment.metrics.matched_name || '').trim();
+    if (!researchName || researchName.length > 40 || researchName.split(/\s+/).length > 5) continue;
+    const currentName = e.name || '';
+    const currentClean = e.classification?.clean_name || '';
+    const isGeneric = /^(AI |An AI |The )/i.test(currentName) || currentName.length > 30;
+    const isGenericClean = /^(AI |An AI |The )/i.test(currentClean) || currentClean.length > 30;
+    if (!isGeneric && !isGenericClean) continue;
+    const updates = {};
+    if (isGeneric) updates.name = researchName;
+    if (isGenericClean) updates['classification.clean_name'] = researchName;
+    await col('entities').updateOne({ _id: e._id }, { $set: updates });
+    console.log(`[Scanner] Fixed name: "${currentName}" → "${researchName}"`);
+    namesFixed++;
+  }
+  if (namesFixed) console.log(`[Scanner] Fixed ${namesFixed} generic entity names`);
+
   console.log('[Scanner] Auto-generating report…');
   try {
     const report = await generateWeeklyReport();

@@ -164,6 +164,19 @@ async function enrichSingle(entity) {
   const entityUpdates = { 'enrichment.web_verified': hasRealData };
   if (nameMatches && metrics.description) entityUpdates.description = metrics.description;
 
+  const researchName = (metrics.matched_name || '').trim();
+  if (researchName && researchName.length <= 40 && researchName.split(/\s+/).length <= 5) {
+    const currentName = entity.name || '';
+    const currentClean = entity.classification?.clean_name || '';
+    const isGeneric = /^(AI |An AI |The )/i.test(currentName) || currentName.length > 30;
+    const isGenericClean = /^(AI |An AI |The )/i.test(currentClean) || currentClean.length > 30;
+    if (isGeneric || isGenericClean) {
+      entityUpdates.name = researchName;
+      entityUpdates['classification.clean_name'] = researchName;
+      console.log(`[Enricher] Updated generic name "${currentName}" → "${researchName}"`);
+    }
+  }
+
   if (enrichedWebsite) {
     const currentUrl = entity.website_url;
     const currentIsGood = currentUrl && isValidProductUrl(currentUrl);

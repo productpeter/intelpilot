@@ -31,16 +31,6 @@ router.get('/scan/status', async (req, res) => {
   const running = runs.filter((r) => r.status === 'running');
   const latest = runs[0] || null;
 
-  const activeCounts = running.reduce(
-    (acc, r) => {
-      acc.candidates += r.counts?.candidates_found || 0;
-      acc.success += r.counts?.extracted_success || 0;
-      acc.fail += r.counts?.extracted_fail || 0;
-      return acc;
-    },
-    { candidates: 0, success: 0, fail: 0 },
-  );
-
   const latestBatch = latest?.started_at
     ? runs.filter((r) => Math.abs(new Date(r.started_at) - new Date(latest.started_at)) < 5000)
     : [];
@@ -59,7 +49,7 @@ router.get('/scan/status', async (req, res) => {
     running_count: running.length,
     latest,
     recent_runs: runs.slice(0, 10),
-    counts: running.length > 0 ? activeCounts : batchCounts,
+    counts: batchCounts,
   });
 });
 
@@ -141,7 +131,32 @@ router.post('/fix-urls', async (req, res) => {
       fixed++;
     }
 
-    res.json({ message: `Fixed ${fixed} entity URLs`, fixed });
+    let namesFixed = 0;
+    const allEnriched = await col('entities')
+      .find({
+        'classification.is_startup': true,
+        'enrichment.metrics.matched_name': { $ne: null },
+      })
+      .toArray();
+
+    for (const e of allEnriched) {
+      const researchName = (e.enrichment.metrics.matched_name || '').trim();
+      if (!researchName || researchName.length > 40 || researchName.split(/\s+/).length > 5) continue;
+      const currentName = e.name || '';
+      const currentClean = e.classification?.clean_name || '';
+      const isGeneric = /^(AI |An AI |The )/i.test(currentName) || currentName.length > 30;
+      const isGenericClean = /^(AI |An AI |The )/i.test(currentClean) || currentClean.length > 30;
+      if (!isGeneric && !isGenericClean) continue;
+
+      const updates = {};
+      if (isGeneric) updates.name = researchName;
+      if (isGenericClean) updates['classification.clean_name'] = researchName;
+      await col('entities').updateOne({ _id: e._id }, { $set: updates });
+      console.log(`[FixNames] "${currentName}" → "${researchName}"`);
+      namesFixed++;
+    }
+
+    res.json({ message: `Fixed ${fixed} URLs, ${namesFixed} names`, fixed, namesFixed });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

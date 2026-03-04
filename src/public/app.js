@@ -110,6 +110,7 @@ function getFiltered() {
     const q = searchQuery.toLowerCase();
     filtered = filtered.filter((e) =>
       (e.name || '').toLowerCase().includes(q) ||
+      (e.enrichment?.metrics?.matched_name || '').toLowerCase().includes(q) ||
       (e.description || '').toLowerCase().includes(q) ||
       (e.classification?.one_liner || '').toLowerCase().includes(q) ||
       (e.classification?.category || '').toLowerCase().includes(q),
@@ -182,8 +183,19 @@ function metricStr(val) {
   return String(val);
 }
 
+function bestName(e) {
+  const clean = e.classification?.clean_name || '';
+  const raw = e.name || '';
+  const researched = e.enrichment?.metrics?.matched_name || '';
+  const isGeneric = (n) => /^(AI |An AI |The )/i.test(n) || n.length > 30;
+  if (clean && !isGeneric(clean)) return clean;
+  if (researched && !isGeneric(researched)) return researched;
+  if (raw && !isGeneric(raw)) return raw;
+  return researched || clean || raw || 'Unknown';
+}
+
 function renderCard(e) {
-  const name = e.classification?.clean_name || e.name || 'Unknown';
+  const name = bestName(e);
   const category = e.classification?.category || '';
   const desc = e.classification?.one_liner || e.description || '';
   const url = e.website_url;
@@ -271,7 +283,7 @@ async function openEntityModal(id) {
 
   try {
     const e = await api('GET', `/entities/${id}`);
-    const name = e.classification?.clean_name || e.name || 'Unknown';
+    const name = bestName(e);
     const category = e.classification?.category || '';
     const desc = e.description || e.classification?.one_liner || '';
     const url = e.website_url;
