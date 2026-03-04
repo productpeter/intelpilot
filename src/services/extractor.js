@@ -152,7 +152,7 @@ export async function processDiscovery(discovery, sourceDoc) {
   };
   const { insertedId: evidenceId } = await col('evidence').insertOne(evidence);
 
-  const productWebsite = resolveProductWebsite(structured, url);
+  const productWebsite = resolveProductWebsite(structured);
 
   const entityCandidate = {
     name: structured.entity_name || structured.title || discovery.title,
@@ -256,7 +256,7 @@ const AGGREGATOR_DOMAINS = new Set([
   'cnbc.com',
 ]);
 
-export function isAggregatorUrl(url) {
+function isAggregatorUrl(url) {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, '');
     return AGGREGATOR_DOMAINS.has(hostname) ||
@@ -298,7 +298,7 @@ function extractDomain(url) {
   }
 }
 
-function resolveProductWebsite(structured, discoveryUrl) {
+function resolveProductWebsite(structured) {
   const fromSchema = normalizeUrl(structured.product_website_url);
   if (fromSchema) return fromSchema;
 

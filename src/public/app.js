@@ -2,7 +2,6 @@ const $ = (sel) => document.querySelector(sel);
 
 const PAGE_SIZE = 24;
 let currentPage = 1;
-let totalEntities = 0;
 let allEntities = [];
 let currentSort = 'revenue_first';
 let currentCategory = '';
@@ -62,8 +61,6 @@ async function loadEntities() {
   try {
     const res = await api('GET', `/entities?sort=${currentSort}&order=desc&limit=10000&skip=0`);
     allEntities = res.data || [];
-    totalEntities = res.total || allEntities.length;
-
     populateCategories(allEntities);
     renderEntities();
   } catch {

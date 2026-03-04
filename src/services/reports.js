@@ -1,7 +1,7 @@
 import { col } from '../db/mongo.js';
 import { enrichEntities } from './enricher.js';
 import { isValidProductUrl } from './extractor.js';
-import { startJob, updateJob, finishJob, failJob } from './progress.js';
+import { startJob, updateJob, finishJob } from './progress.js';
 
 export async function generateWeeklyReport() {
   const now = new Date();
