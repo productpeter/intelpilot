@@ -1,4 +1,5 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
+html { overflow-x: hidden; }
 
 :root {
   --bg: #0a0a0f;
@@ -1020,6 +1021,7 @@ body {
   .nav-inner { flex-wrap: wrap; height: auto; padding: 0.6rem 1rem; gap: 0.4rem; }
   .nav-brand { flex-shrink: 0; }
   .nav-status { flex-shrink: 0; margin-left: auto; }
+  .navbar { overflow: hidden; }
   .nav-actions {
     width: calc(100% + 2rem); margin-left: -1rem; margin-right: -1rem;
     padding: 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
