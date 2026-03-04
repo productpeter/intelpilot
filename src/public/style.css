@@ -1047,6 +1047,7 @@ body {
   .pipeline-step {
     flex-shrink: 0;
     display: flex; flex-direction: column;
+    align-items: flex-start;
     gap: 0.15rem;
     font-size: 0.72rem;
     min-width: 0;
