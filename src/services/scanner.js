@@ -6,13 +6,25 @@ import { generateWeeklyReport } from './reports.js';
 import { betterName } from '../lib/namefix.js';
 
 const EXTRACTION_CONCURRENCY = 10;
+const SOURCE_TIMEOUT_MS = 10 * 60 * 1000;
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms),
+    ),
+  ]);
+}
 
 export async function runFullScan() {
   console.log('[Scanner] Starting full scan (concurrent)…');
   const sources = getAllSources();
 
   const settled = await Promise.allSettled(
-    sources.map((source) => runSourceScan(source)),
+    sources.map((source) =>
+      withTimeout(runSourceScan(source), SOURCE_TIMEOUT_MS, source.name),
+    ),
   );
 
   const results = settled.map((r, i) =>
