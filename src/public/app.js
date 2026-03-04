@@ -494,9 +494,15 @@ async function pollPipeline() {
     if (!pipelineScanDone) {
       const c = scanData.counts || {};
       if (scanData.is_running) {
-        setStepState('scan', 'active', `${c.success || 0} extracted · ${c.candidates || 0} candidates`);
+        const detail = c.new_candidates
+          ? `${c.candidates || 0} found · ${c.new_candidates} new · ${c.success || 0} extracted`
+          : `${c.candidates || 0} found · ${c.success || 0} extracted`;
+        setStepState('scan', 'active', detail);
       } else {
-        setStepState('scan', 'done', `${c.success || 0} extracted`);
+        const doneDetail = c.new_candidates
+          ? `${c.candidates || 0} found · ${c.new_candidates} new`
+          : `${c.candidates || 0} found · ${c.success || 0} extracted`;
+        setStepState('scan', 'done', doneDetail);
         pipelineScanDone = true;
         loadEntities();
       }
@@ -663,7 +669,10 @@ async function checkRunningPipeline() {
       pipelineEnrichDone = false;
       pipelineReportDone = false;
       const c = scanData.counts || {};
-      setStepState('scan', 'active', `${c.success || 0} extracted · ${c.candidates || 0} candidates`);
+      const detail = c.new_candidates
+        ? `${c.candidates || 0} found · ${c.new_candidates} new · ${c.success || 0} extracted`
+        : `${c.candidates || 0} found · ${c.success || 0} extracted`;
+      setStepState('scan', 'active', detail);
       setStepState('enrich', '', 'waiting');
       setStepState('report', '', 'waiting');
     } else if (enrichRunning) {

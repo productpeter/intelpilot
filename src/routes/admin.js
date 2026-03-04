@@ -37,11 +37,12 @@ router.get('/scan/status', async (req, res) => {
   const batchCounts = latestBatch.reduce(
     (acc, r) => {
       acc.candidates += r.counts?.candidates_found || 0;
+      acc.new_candidates += r.counts?.new_candidates || 0;
       acc.success += r.counts?.extracted_success || 0;
       acc.fail += r.counts?.extracted_fail || 0;
       return acc;
     },
-    { candidates: 0, success: 0, fail: 0 },
+    { candidates: 0, new_candidates: 0, success: 0, fail: 0 },
   );
 
   res.json({

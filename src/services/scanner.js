@@ -117,7 +117,7 @@ export async function runSourceScan(source) {
     source_id: sourceDoc._id,
     started_at: new Date(),
     status: 'running',
-    counts: { candidates_found: 0, extracted_success: 0, extracted_fail: 0 },
+    counts: { candidates_found: 0, new_candidates: 0, extracted_success: 0, extracted_fail: 0 },
   };
   const { insertedId: scanRunId } = await col('scan_runs').insertOne(scanRun);
 
@@ -133,6 +133,11 @@ export async function runSourceScan(source) {
       });
       if (!existing) newCandidates.push(candidate);
     }
+    scanRun.counts.new_candidates = newCandidates.length;
+    await col('scan_runs').updateOne(
+      { _id: scanRunId },
+      { $set: { counts: scanRun.counts } },
+    );
 
     const chunks = [];
     for (let i = 0; i < newCandidates.length; i += EXTRACTION_CONCURRENCY) {

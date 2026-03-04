@@ -76,12 +76,17 @@ async function createEntity(candidate, embedding) {
 }
 
 async function mergeEntityFields(entityId, candidate) {
+  const existing = await col('entities').findOne({ _id: entityId });
   const $set = { updated_at: new Date() };
   const $addToSet = {};
 
   if (candidate.canonical_domain) $set.canonical_domain = candidate.canonical_domain;
-  if (candidate.description) $set.description = candidate.description;
-  if (candidate.website_url) $set.website_url = candidate.website_url;
+  if (candidate.description && !existing?.enrichment) $set.description = candidate.description;
+
+  if (candidate.website_url && !existing?.website_url) {
+    $set.website_url = candidate.website_url;
+  }
+
   if (candidate.tags?.length) $addToSet.tags = { $each: candidate.tags };
 
   if (candidate.identifiers) {
