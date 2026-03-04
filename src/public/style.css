@@ -264,6 +264,12 @@ body {
   transition: color 0.2s;
 }
 
+.step-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .pipeline-step.active { color: var(--blue); }
 .pipeline-step.done { color: var(--green); }
 .pipeline-step.error { color: var(--red); }
@@ -1027,26 +1033,32 @@ body {
   .report-dropdown-wrap { flex-shrink: 0; position: static; }
   .report-history-dropdown { position: fixed; width: calc(100vw - 2rem); max-width: 340px; left: 1rem; right: 1rem; top: auto; z-index: 9999; }
 
-  .pipeline-progress { padding: 0.5rem 1rem; }
-  .pipeline-steps {
-    display: flex; flex-direction: column; gap: 0.25rem;
-    padding: 0;
+  .pipeline-progress {
+    padding: 0.5rem 0;
+    width: calc(100% + 2rem); margin-left: -1rem; margin-right: -1rem;
   }
+  .pipeline-steps {
+    display: flex; flex-direction: row; gap: 0.5rem;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    padding: 0 1rem 0.2rem;
+  }
+  .pipeline-steps::after { content: ''; min-width: 0.5rem; flex-shrink: 0; }
   .pipeline-step + .pipeline-step::before { display: none; }
   .pipeline-step {
-    display: grid;
-    grid-template-columns: 20px 1fr;
-    grid-template-rows: auto auto;
-    gap: 0 0.4rem;
-    font-size: 0.74rem;
-    align-items: start;
+    flex-shrink: 0;
+    display: flex; flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.72rem;
+    min-width: 0;
+    padding: 0.35rem 0.6rem;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
   }
-  .step-icon {
-    width: 20px; height: 20px; font-size: 0.62rem; flex-shrink: 0;
-    grid-row: 1 / -1; align-self: center;
-  }
-  .step-label { grid-column: 2; white-space: nowrap; }
-  .step-detail { grid-column: 2; font-size: 0.68rem; }
+  .pipeline-step .step-row { display: flex; align-items: center; gap: 0.3rem; }
+  .step-icon { width: 18px; height: 18px; font-size: 0.6rem; flex-shrink: 0; }
+  .step-label { white-space: nowrap; }
+  .step-detail { font-size: 0.66rem; white-space: nowrap; }
   .toolbar { flex-direction: column; align-items: stretch; }
   .toolbar-right { flex-wrap: wrap; }
   .entity-grid { grid-template-columns: 1fr; }
