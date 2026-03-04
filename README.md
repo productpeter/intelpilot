@@ -155,7 +155,7 @@ cp .env.example .env
 | `OPENAI_API_KEY` | **Yes** | OpenAI API key (used for embeddings + gpt-4o-mini classification/extraction) |
 | `OPENAI_EMBEDDING_MODEL` | No | Embedding model (default: `text-embedding-3-large`) |
 | `OPENAI_EMBEDDING_DIM` | No | Vector dimensions (default: `3072`) |
-| `SCAN_CRON` | No | Daily scan schedule (default: `0 8 * * *` = every day at 8:00 AM UTC) |
+| `SCAN_CRON` | No | Daily scan schedule (default: `0 8 * * *` = every day at 8:00 AM UTC). Cron is pinned to UTC timezone regardless of container locale |
 | `R2_BUCKET` | No | R2 bucket name |
 | `R2_ACCESS_KEY_ID` | No | R2 access key |
 | `R2_SECRET_ACCESS_KEY` | No | R2 secret key |
@@ -221,8 +221,9 @@ The server connects to MongoDB, ensures indexes, starts cron jobs, and listens o
 | `/api/entities/:id` | GET | Entity detail with signals + evidence |
 | `/report` | GET | Latest report rendered as a standalone HTML page |
 | `/report/:id` | GET | Specific report by ID rendered as HTML |
-| `/api/admin/scan/status` | GET | Live scan progress (running state, counts, recent runs) |
+| `/api/admin/scan/status` | GET | Live scan progress (running state, counts, recent runs). Auto-cleans stale runs (>5 min) |
 | `/api/admin/jobs` | GET | Live progress for all operations (scan, report, enrich) |
+| `/api/admin/scan/triggers` | GET | Last 20 scan trigger records (IP, user-agent, referer, timestamp) |
 
 ### Admin Endpoints
 
@@ -230,7 +231,7 @@ Require `Authorization: Bearer <ADMIN_TOKEN>` header (skipped in dev if token is
 
 | Endpoint | Method | Description |
 | --- | --- | --- |
-| `/api/admin/scan/run` | POST | Trigger full pipeline: scan → enrich → URL/name fix → report (returns immediately, runs in background) |
+| `/api/admin/scan/run` | POST | Trigger full pipeline: scan → enrich → URL/name fix → report (returns immediately, runs in background). **15-minute cooldown** between API triggers; cron bypasses cooldown. Logs IP/UA/referer to `scan_triggers` collection |
 | `/api/admin/report/generate` | POST | Generate a report manually (awaits enrichment, then builds HTML) |
 | `/api/admin/enrich` | POST | Manually trigger enrichment. Query: `?limit=15` |
 | `/api/admin/fix-urls` | POST | Bulk-sync entity `website_url` from enrichment data + fix generic/wrong entity names |
@@ -457,6 +458,14 @@ Cost: ~1 Tabstack credit per `/research` call.
 | `captured_at` | Date | When captured |
 | `enriched` | boolean | `true` if signal came from research enrichment |
 
+### `scan_triggers`
+| Field | Type | Description |
+| --- | --- | --- |
+| `triggered_at` | Date | When the scan was triggered via API |
+| `ip` | string | Requester IP (from `x-forwarded-for` or socket) |
+| `user_agent` | string | Requester user-agent header |
+| `referer` | string | Requester referer/origin header |
+
 ### `reports`
 | Field | Type | Description |
 | --- | --- | --- |
@@ -553,7 +562,11 @@ Reports use the same dark theme as the dashboard (matching CSS variables, colors
 | --- | --- | --- |
 | Full pipeline (scan → enrich → report) | Daily at 8:00 AM UTC | `SCAN_CRON` |
 
-A single daily cron runs the entire pipeline. The scan discovers new startups, enrichment researches them, and a report is auto-generated with all new findings.
+A single daily cron runs the entire pipeline. The cron is **pinned to UTC timezone** (via `node-cron`'s `timezone` option) to avoid unexpected triggers when Railway containers use non-UTC locales. The scan discovers new startups, enrichment researches them, and a report is auto-generated with all new findings.
+
+### Scan Rate Limiting
+
+API-triggered scans (`POST /api/admin/scan/run`) have a **15-minute cooldown** — if a scan was triggered within the last 15 minutes, subsequent API calls return `429 Too Many Requests`. The daily cron bypasses this cooldown since it calls `runFullScan()` directly. Every API-triggered scan logs the requester's IP, user-agent, and referer to the `scan_triggers` MongoDB collection for audit purposes.
 
 ---
 
@@ -568,11 +581,11 @@ The app serves an embedded dashboard at `/` — no separate frontend build or de
 - **Scan Pipeline** — one-click "Scan for New Startups" button triggers the full pipeline (scan → enrich → report) with a **3-step progress tracker** showing live status for each stage (e.g. "600 sources crawled · 56 unseen · 10 extracted")
 - **Pipeline Persistence** — refreshing the page mid-scan automatically detects and resumes progress tracking
 - **Smart Entity Names** — frontend `bestName()` picks the best non-generic name across `clean_name`, `matched_name`, and `name`
-- **Report Modal** — "Newest Startup Report" opens the latest report in an in-app modal (dark-themed, matching the dashboard). Option to open in a new tab
-- **Past Reports** — dropdown in the navbar listing all historical reports, each viewable in the modal
-- **Stale Run Cleanup** — scan runs stuck for 15+ minutes are auto-marked as failed; per-source 10-minute timeout prevents pipeline stalls
+- **Startup Reports** — unified dropdown in the navbar listing all reports (latest highlighted); each opens in an in-app dark-themed modal with option to open in a new tab
+- **Stale Run Cleanup** — scan runs stuck for 5+ minutes are auto-marked as failed; per-source 10-minute timeout prevents pipeline stalls
+- **Scan Rate Limiting** — 15-minute cooldown between API-triggered scans; returns 429 if triggered too soon
 - **Tech Stack** — footer showing all technologies used
-- **Responsive** — mobile-friendly with scrollable navbar and single-column grid
+- **Responsive** — mobile-friendly with scrollable navbar, horizontal pipeline step cards, and single-column grid
 
 ### Architecture
 
