@@ -588,6 +588,7 @@ $('#btn-scan').addEventListener('click', async () => {
     setFeedback(`Scan error: ${err.message}`, 'error');
     $('#btn-scan').disabled = false;
     hidePipeline();
+    setTimeout(() => setFeedback('', ''), 5000);
   }
 });
 
