@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
   if (tag) filter.tags = tag;
 
   const sortDir = order === 'asc' ? 1 : -1;
-  const lim = Math.min(parseInt(limit, 10) || 50, 500);
+  const lim = parseInt(limit, 10) || 50;
   const sk = parseInt(skip, 10) || 0;
 
   const [data, total] = await Promise.all([

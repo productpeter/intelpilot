@@ -61,7 +61,7 @@ async function checkHealth() {
 async function loadEntities() {
   const grid = $('#entity-grid');
   try {
-    const res = await api('GET', `/entities?sort=${currentSort}&order=desc&limit=500&skip=0`);
+    const res = await api('GET', `/entities?sort=${currentSort}&order=desc&limit=10000&skip=0`);
     allEntities = res.data || [];
     totalEntities = res.total || allEntities.length;
 
