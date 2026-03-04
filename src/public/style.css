@@ -1040,7 +1040,7 @@ body {
   .pipeline-steps {
     display: flex; flex-direction: row; gap: 0.5rem;
     overflow-x: auto; -webkit-overflow-scrolling: touch;
-    padding: 0 1rem 0.2rem;
+    padding: 0 1.5rem 0.2rem;
   }
   .pipeline-steps::after { content: ''; min-width: 0.5rem; flex-shrink: 0; }
   .pipeline-step + .pipeline-step::before { display: none; }

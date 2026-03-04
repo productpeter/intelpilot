@@ -10,7 +10,7 @@ import { betterName } from '../lib/namefix.js';
 const router = Router();
 
 router.get('/scan/status', async (req, res) => {
-  const staleThreshold = new Date(Date.now() - 15 * 60 * 1000);
+  const staleThreshold = new Date(Date.now() - 5 * 60 * 1000);
   await col('scan_runs').updateMany(
     {
       status: 'running',
