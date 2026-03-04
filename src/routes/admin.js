@@ -58,9 +58,27 @@ router.get('/jobs', (req, res) => {
   res.json(getAllJobs());
 });
 
+router.get('/scan/triggers', async (req, res) => {
+  const triggers = await col('scan_triggers').find({}).sort({ triggered_at: -1 }).limit(20).toArray();
+  res.json(triggers);
+});
+
 router.use(adminAuth);
 
 router.post('/scan/run', async (req, res) => {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const ua = req.headers['user-agent'] || 'none';
+  const ref = req.headers['referer'] || req.headers['origin'] || 'none';
+
+  const lastTrigger = await col('scan_triggers').findOne({}, { sort: { triggered_at: -1 } });
+  const cooldown = 15 * 60 * 1000;
+  if (lastTrigger && Date.now() - new Date(lastTrigger.triggered_at).getTime() < cooldown) {
+    const mins = Math.ceil((cooldown - (Date.now() - new Date(lastTrigger.triggered_at).getTime())) / 60000);
+    return res.status(429).json({ error: `Scan cooldown — try again in ${mins} min` });
+  }
+
+  await col('scan_triggers').insertOne({ triggered_at: new Date(), ip, user_agent: ua, referer: ref });
+  console.log(`[Admin] Scan triggered — ip=${ip} ua=${ua} referer=${ref}`);
   res.json({ message: 'Scan started', status: 'running' });
   runFullScan().catch((err) => console.error('[Admin] Scan error:', err));
 });
