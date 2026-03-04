@@ -18,9 +18,14 @@ router.get('/', async (req, res) => {
   const lim = parseInt(limit, 10) || 50;
   const sk = parseInt(skip, 10) || 0;
 
+  const listProjection = {
+    embedding: 0,
+    'enrichment.research_text': 0,
+  };
+
   const [data, total] = await Promise.all([
     col('entities')
-      .find(filter, { projection: { embedding: 0 } })
+      .find(filter, { projection: listProjection })
       .sort({ [sort]: sortDir })
       .allowDiskUse()
       .skip(sk)
