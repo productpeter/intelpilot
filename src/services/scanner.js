@@ -3,6 +3,7 @@ import { getAllSources } from '../sources/index.js';
 import { processDiscovery, isValidProductUrl } from './extractor.js';
 import { enrichEntities } from './enricher.js';
 import { generateWeeklyReport } from './reports.js';
+import { betterName } from '../lib/namefix.js';
 
 const EXTRACTION_CONCURRENCY = 10;
 
@@ -78,18 +79,11 @@ async function triggerPostScanPipeline() {
 
   let namesFixed = 0;
   for (const e of genericNames) {
-    const researchName = (e.enrichment.metrics.matched_name || '').trim();
-    if (!researchName || researchName.length > 40 || researchName.split(/\s+/).length > 5) continue;
-    const currentName = e.name || '';
-    const currentClean = e.classification?.clean_name || '';
-    const isGeneric = /^(AI |An AI |The )/i.test(currentName) || currentName.length > 30;
-    const isGenericClean = /^(AI |An AI |The )/i.test(currentClean) || currentClean.length > 30;
-    if (!isGeneric && !isGenericClean) continue;
-    const updates = {};
-    if (isGeneric) updates.name = researchName;
-    if (isGenericClean) updates['classification.clean_name'] = researchName;
-    await col('entities').updateOne({ _id: e._id }, { $set: updates });
-    console.log(`[Scanner] Fixed name: "${currentName}" → "${researchName}"`);
+    const matched = (e.enrichment.metrics.matched_name || '').trim();
+    const fixed = betterName(e.name, e.classification?.clean_name, matched, e.website_url);
+    if (!fixed) continue;
+    await col('entities').updateOne({ _id: e._id }, { $set: { name: fixed, 'classification.clean_name': fixed } });
+    console.log(`[Scanner] Fixed name: "${e.name}" → "${fixed}"`);
     namesFixed++;
   }
   if (namesFixed) console.log(`[Scanner] Fixed ${namesFixed} generic entity names`);

@@ -6,6 +6,7 @@ import { enrichEntities } from '../services/enricher.js';
 import { isValidProductUrl } from '../services/extractor.js';
 import { col } from '../db/mongo.js';
 import { getAllJobs } from '../services/progress.js';
+import { betterName } from '../lib/namefix.js';
 
 const router = Router();
 
@@ -141,19 +142,13 @@ router.post('/fix-urls', async (req, res) => {
       .toArray();
 
     for (const e of allEnriched) {
-      const researchName = (e.enrichment.metrics.matched_name || '').trim();
-      if (!researchName || researchName.length > 40 || researchName.split(/\s+/).length > 5) continue;
-      const currentName = e.name || '';
-      const currentClean = e.classification?.clean_name || '';
-      const isGeneric = /^(AI |An AI |The )/i.test(currentName) || currentName.length > 30;
-      const isGenericClean = /^(AI |An AI |The )/i.test(currentClean) || currentClean.length > 30;
-      if (!isGeneric && !isGenericClean) continue;
+      const matched = (e.enrichment.metrics.matched_name || '').trim();
+      const fixed = betterName(e.name, e.classification?.clean_name, matched, e.website_url);
+      if (!fixed) continue;
 
-      const updates = {};
-      if (isGeneric) updates.name = researchName;
-      if (isGenericClean) updates['classification.clean_name'] = researchName;
+      const updates = { name: fixed, 'classification.clean_name': fixed };
       await col('entities').updateOne({ _id: e._id }, { $set: updates });
-      console.log(`[FixNames] "${currentName}" → "${researchName}"`);
+      console.log(`[FixNames] "${e.name}" → "${fixed}"`);
       namesFixed++;
     }
 
