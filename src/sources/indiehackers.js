@@ -1,9 +1,7 @@
 import { extractJson } from '../lib/tabstack.js';
 
 const PAGES = [
-  { url: 'https://www.indiehackers.com/products?sorting=newest-first', label: 'IH Newest' },
-  { url: 'https://www.indiehackers.com/products?sorting=highest-revenue', label: 'IH Top Revenue' },
-  { url: 'https://www.indiehackers.com/products?sorting=most-followers', label: 'IH Most Followed' },
+  { url: 'https://www.indiehackers.com/', label: 'IH Homepage' },
 ];
 
 const SCHEMA = {
