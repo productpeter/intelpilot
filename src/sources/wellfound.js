@@ -2,13 +2,8 @@ import { extractJson } from '../lib/tabstack.js';
 
 const PAGES = [
   { url: 'https://wellfound.com/startups/artificial-intelligence', label: 'Wellfound AI' },
-  { url: 'https://wellfound.com/startups/machine-learning', label: 'Wellfound ML' },
   { url: 'https://wellfound.com/startups/saas', label: 'Wellfound SaaS' },
-  { url: 'https://wellfound.com/startups/developer-tools', label: 'Wellfound DevTools' },
   { url: 'https://wellfound.com/startups/generative-ai', label: 'Wellfound GenAI' },
-  { url: 'https://wellfound.com/startups/data-analytics', label: 'Wellfound Analytics' },
-  { url: 'https://wellfound.com/startups/natural-language-processing', label: 'Wellfound NLP' },
-  { url: 'https://wellfound.com/startups/cloud-computing', label: 'Wellfound Cloud' },
 ];
 
 const SCHEMA = {

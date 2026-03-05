@@ -2,13 +2,8 @@ import { extractJson } from '../lib/tabstack.js';
 
 const PAGES = [
   'https://www.crunchbase.com/discover/organization.companies/field/organizations/categories/artificial-intelligence',
-  'https://www.crunchbase.com/discover/organization.companies/field/organizations/categories/machine-learning',
   'https://www.crunchbase.com/discover/organization.companies/field/organizations/categories/generative-ai',
-  'https://www.crunchbase.com/discover/organization.companies/field/organizations/categories/natural-language-processing',
   'https://www.crunchbase.com/discover/organization.companies/field/organizations/categories/saas',
-  'https://www.crunchbase.com/discover/organization.companies/field/organizations/categories/developer-tools',
-  'https://www.crunchbase.com/discover/organization.companies/field/organizations/last_funding_type/seed',
-  'https://www.crunchbase.com/discover/organization.companies/field/organizations/last_funding_type/pre_seed',
 ];
 
 const SCHEMA = {
