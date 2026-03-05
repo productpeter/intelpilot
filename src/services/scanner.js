@@ -52,7 +52,6 @@ async function triggerPostScanPipeline() {
   const unenriched = await col('entities')
     .find({ 'classification.is_startup': true, enrichment: { $exists: false } })
     .sort({ updated_at: -1 })
-    .limit(50)
     .toArray();
 
   if (unenriched.length) {

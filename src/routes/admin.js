@@ -66,7 +66,7 @@ router.post('/scan/run', async (req, res) => {
   const ref = req.headers['referer'] || req.headers['origin'] || 'none';
 
   const lastTrigger = await col('scan_triggers').findOne({}, { sort: { triggered_at: -1 } });
-  const cooldown = 15 * 60 * 1000;
+  const cooldown = 0;
   if (lastTrigger && Date.now() - new Date(lastTrigger.triggered_at).getTime() < cooldown) {
     const mins = Math.ceil((cooldown - (Date.now() - new Date(lastTrigger.triggered_at).getTime())) / 60000);
     return res.status(429).json({ error: `Scan cooldown — try again in ${mins} min` });
