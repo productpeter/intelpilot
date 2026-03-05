@@ -9,7 +9,6 @@ import aitoolsdirectory from './aitoolsdirectory.js';
 import yclaunches from './yclaunches.js';
 import github from './github.js';
 import venturebeat from './venturebeat.js';
-import crunchbase from './crunchbase.js';
 import wellfound from './wellfound.js';
 import indiehackers from './indiehackers.js';
 
@@ -25,7 +24,6 @@ const sources = [
   yclaunches,
   github,
   venturebeat,
-  crunchbase,
   wellfound,
   indiehackers,
 ];
