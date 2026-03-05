@@ -4,19 +4,10 @@ const SUBREDDITS = [
   { sub: 'SaaS', limit: 25 },
   { sub: 'startups', limit: 25 },
   { sub: 'indiehackers', limit: 25 },
-  { sub: 'artificial', limit: 25 },
-  { sub: 'LocalLLaMA', limit: 25 },
-  { sub: 'machinelearning', limit: 25 },
-  { sub: 'ChatGPT', limit: 25 },
-  { sub: 'singularity', limit: 25 },
-  { sub: 'OpenAI', limit: 25 },
   { sub: 'AItools', limit: 25 },
-  { sub: 'Entrepreneur', limit: 25 },
   { sub: 'microsaas', limit: 25 },
-  { sub: 'selfhosted', limit: 25 },
+  { sub: 'Entrepreneur', limit: 25 },
 ];
-
-const SORTS = ['hot'];
 const UA = { 'User-Agent': 'node:intelpilot:v1.0 (startup discovery research tool)' };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -61,31 +52,20 @@ export default {
   type: 'html',
 
   async fetchCandidates() {
-    const BATCH_SIZE = 2;
-    const tasks = SUBREDDITS.flatMap((s) =>
-      SORTS.map((sort) => ({ sub: s.sub, limit: s.limit, sort })),
-    );
-
     const seen = new Set();
     const candidates = [];
 
-    for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
-      const batch = tasks.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map((t) => fetchSubreddit(t.sub, t.limit, t.sort)),
-      );
-      for (const r of results) {
-        if (r.status !== 'fulfilled') continue;
-        for (const c of r.value) {
-          if (seen.has(c.url)) continue;
-          seen.add(c.url);
-          candidates.push(c);
-        }
+    for (const s of SUBREDDITS) {
+      const posts = await fetchSubreddit(s.sub, s.limit, 'hot');
+      for (const c of posts) {
+        if (seen.has(c.url)) continue;
+        seen.add(c.url);
+        candidates.push(c);
       }
-      if (i + BATCH_SIZE < tasks.length) await sleep(3000);
+      await sleep(3000);
     }
 
-    console.log(`[Reddit] Fetched ${candidates.length} unique candidates from ${SUBREDDITS.length} subs × ${SORTS.length} sorts`);
+    console.log(`[Reddit] Fetched ${candidates.length} unique candidates from ${SUBREDDITS.length} subs (sequential)`);
     return candidates;
   },
 };
