@@ -11,7 +11,7 @@ import { betterName } from '../lib/namefix.js';
 const router = Router();
 
 router.get('/scan/status', async (req, res) => {
-  const staleThreshold = new Date(Date.now() - 5 * 60 * 1000);
+  const staleThreshold = new Date(Date.now() - 12 * 60 * 1000);
   await col('scan_runs').updateMany(
     { status: 'running', started_at: { $lt: staleThreshold } },
     { $set: { status: 'fail', finished_at: new Date() } },
@@ -22,6 +22,17 @@ router.get('/scan/status', async (req, res) => {
     .sort({ started_at: -1 })
     .limit(20)
     .toArray();
+
+  const sourceIds = [...new Set(runs.map((r) => r.source_id))];
+  const sources = await col('sources')
+    .find({ _id: { $in: sourceIds } })
+    .project({ name: 1 })
+    .toArray();
+  const sourceMap = Object.fromEntries(sources.map((s) => [String(s._id), s.name]));
+
+  for (const r of runs) {
+    r.source_name = sourceMap[String(r.source_id)] || 'unknown';
+  }
 
   const running = runs.filter((r) => r.status === 'running');
   const latest = runs[0] || null;
