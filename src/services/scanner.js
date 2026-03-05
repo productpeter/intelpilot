@@ -4,6 +4,7 @@ import { processDiscovery, isValidProductUrl } from './extractor.js';
 import { enrichEntities } from './enricher.js';
 import { generateWeeklyReport } from './reports.js';
 import { betterName } from '../lib/namefix.js';
+import { startJob, updateJob, finishJob } from './progress.js';
 
 const EXTRACTION_CONCURRENCY = 10;
 const SOURCE_TIMEOUT_MS = 10 * 60 * 1000;
@@ -43,6 +44,9 @@ export async function runFullScan() {
 }
 
 async function triggerPostScanPipeline() {
+  startJob('enrich');
+  updateJob('enrich', { message: 'Preparing enrichment…' });
+
   const unenriched = await col('entities')
     .find({ 'classification.is_startup': true, enrichment: { $exists: false } })
     .sort({ updated_at: -1 })
@@ -54,6 +58,7 @@ async function triggerPostScanPipeline() {
     await enrichEntities(unenriched);
   } else {
     console.log('[Scanner] No unenriched entities after scan');
+    finishJob('enrich', { message: '0 to enrich' });
   }
 
   const missingUrlEntities = await col('entities')
