@@ -244,6 +244,61 @@ body {
 
 /* Pipeline progress */
 .pipeline-progress[hidden] { display: none !important; }
+.enrich-progress[hidden] { display: none !important; }
+
+.enrich-progress {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0.5rem 1.5rem 0.6rem;
+  border-top: 1px solid var(--border);
+}
+
+.enrich-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.78rem;
+}
+
+.enrich-label {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.enrich-detail {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.enrich-track {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.enrich-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.5s ease;
+}
+
+.nav-btn.enrich {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.nav-btn.enrich:hover {
+  background: var(--surface-3, var(--surface-2));
+  border-color: var(--accent);
+}
 
 .pipeline-progress {
   max-width: 1400px;

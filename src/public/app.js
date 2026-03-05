@@ -630,6 +630,83 @@ function stopPipelinePolling() {
   if (pipelineTimer) { clearInterval(pipelineTimer); pipelineTimer = null; }
 }
 
+/* Enrich-only UI */
+let enrichTimer = null;
+
+function showEnrichProgress() {
+  $('#enrich-progress').hidden = false;
+}
+
+function hideEnrichProgress() {
+  $('#enrich-progress').hidden = true;
+}
+
+function updateEnrichBar(completed, failed, total) {
+  const pct = total ? Math.round(((completed + failed) / total) * 100) : 0;
+  $('#enrich-detail').textContent = `${completed} done · ${failed} failed / ${total} total (${pct}%)`;
+  $('#enrich-fill').style.width = `${pct}%`;
+}
+
+async function pollEnrichOnly() {
+  try {
+    const jobs = await api('GET', '/admin/jobs');
+    const ej = jobs.enrich;
+    if (ej?.status === 'running') {
+      updateEnrichBar(ej.completed || 0, ej.failed || 0, ej.total || 0);
+    } else if (ej?.status === 'done') {
+      const msg = typeof ej.message === 'string' ? ej.message : 'complete';
+      $('#enrich-detail').textContent = msg;
+      $('#enrich-fill').style.width = '100%';
+      setFeedback('Re-enrichment complete', 'success');
+      $('#btn-enrich').disabled = false;
+      stopEnrichPolling();
+      loadEntities();
+      setTimeout(() => { hideEnrichProgress(); setFeedback('', ''); }, 8000);
+    } else if (ej?.status === 'error') {
+      $('#enrich-detail').textContent = 'failed';
+      setFeedback('Re-enrichment failed', 'error');
+      $('#btn-enrich').disabled = false;
+      stopEnrichPolling();
+      setTimeout(() => { hideEnrichProgress(); setFeedback('', ''); }, 5000);
+    }
+  } catch {
+    stopEnrichPolling();
+  }
+}
+
+function startEnrichPolling() {
+  if (enrichTimer) return;
+  enrichTimer = setInterval(pollEnrichOnly, 3000);
+  setTimeout(pollEnrichOnly, 800);
+}
+
+function stopEnrichPolling() {
+  if (enrichTimer) { clearInterval(enrichTimer); enrichTimer = null; }
+}
+
+$('#btn-enrich').addEventListener('click', async () => {
+  if (!confirm('Re-enrich all existing startup entities? This will update evidence links and news for every entity.')) return;
+  $('#btn-enrich').disabled = true;
+  setFeedback('Starting re-enrichment…', 'loading');
+  showEnrichProgress();
+  updateEnrichBar(0, 0, 0);
+  try {
+    const res = await api('POST', '/admin/re-enrich');
+    if (res.count === 0) {
+      const enrichRes = await api('POST', '/admin/enrich?limit=5000');
+      setFeedback(`Enriching ${enrichRes.count} entities…`, 'loading');
+    } else {
+      setFeedback(`Re-enriching ${res.count} entities…`, 'loading');
+    }
+    startEnrichPolling();
+  } catch (err) {
+    setFeedback(`Enrich error: ${err.message}`, 'error');
+    $('#btn-enrich').disabled = false;
+    hideEnrichProgress();
+    setTimeout(() => setFeedback('', ''), 5000);
+  }
+});
+
 $('#btn-scan').addEventListener('click', async () => {
   $('#btn-scan').disabled = true;
   setFeedback('Starting scan pipeline…', 'loading');

@@ -26,6 +26,12 @@
         </button>
         <div class="btn-tooltip">Crawl all sources for new AI startups, auto-enrich discovered entities, then generate a report.</div>
       </div>
+      <div class="nav-btn-wrap">
+        <button id="btn-enrich" class="nav-btn enrich">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+          Re-enrich All
+        </button>
+      </div>
       <div class="report-dropdown-wrap">
         <button class="nav-btn ghost" id="btn-reports-toggle">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -45,6 +51,13 @@
       <div class="pipeline-step" id="step-scan"><div class="step-row"><span class="step-icon">1</span><span class="step-label">Scanning sources</span></div><span class="step-detail" id="step-scan-detail"></span></div>
       <div class="pipeline-step" id="step-enrich"><div class="step-row"><span class="step-icon">2</span><span class="step-label">Enriching entities</span></div><span class="step-detail" id="step-enrich-detail"></span></div>
       <div class="pipeline-step" id="step-report"><div class="step-row"><span class="step-icon">3</span><span class="step-label">Generating report</span></div><span class="step-detail" id="step-report-detail"></span></div>
+    </div>
+  </div>
+  <div class="enrich-progress" id="enrich-progress" hidden>
+    <div class="enrich-bar">
+      <span class="enrich-label">Re-enriching</span>
+      <span class="enrich-detail" id="enrich-detail">starting…</span>
+      <div class="enrich-track"><div class="enrich-fill" id="enrich-fill"></div></div>
     </div>
   </div>
 </nav>

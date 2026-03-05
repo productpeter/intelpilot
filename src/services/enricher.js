@@ -39,8 +39,8 @@ IMPORTANT:
 - Every field except "recent_news" must be either null or a plain string. NEVER return objects or arrays for those fields.
 - "recent_news" is an array of objects (up to 5 most recent). Return an empty array [] if no news articles are found.
 - Only include data explicitly stated in the research. Do not guess or fabricate numbers.
-- For _source fields: provide the specific URL from the research text where the data was cited. If no URL is available for a metric, use null.
-- For recent_news: only include real articles with actual URLs from the research text. Do not invent articles.`;
+- For _source fields: provide the EXACT URL from the research text where the data was cited. If no specific URL is mentioned in the research for a metric, you MUST return null. NEVER fabricate or guess URLs. NEVER use example.com or placeholder URLs.
+- For recent_news: only include real articles with actual URLs that appear in the research text. NEVER invent article URLs. If no real article URLs are found, return an empty array [].`;
 
 const ENRICHMENT_CONCURRENCY = 20;
 
@@ -115,9 +115,21 @@ async function enrichSingle(entity) {
     }
   }
 
+  const FAKE_URL_PATTERNS = /example\.com|placeholder|fake|localhost|127\.0\.0\.1|test\.com/i;
+
+  function isRealUrl(url) {
+    return url && typeof url === 'string' && url.startsWith('http') && !FAKE_URL_PATTERNS.test(url);
+  }
+
+  for (const key of allMetricKeys) {
+    if (key.endsWith('_source') && metrics[key] && !isRealUrl(metrics[key])) {
+      metrics[key] = null;
+    }
+  }
+
   const recentNews = Array.isArray(metrics.recent_news)
     ? metrics.recent_news
-        .filter((n) => n && typeof n === 'object' && n.title && n.url && typeof n.url === 'string' && n.url.startsWith('http'))
+        .filter((n) => n && typeof n === 'object' && n.title && isRealUrl(n.url))
         .slice(0, 5)
         .map((n) => ({
           title: String(n.title || '').slice(0, 200),
