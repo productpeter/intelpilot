@@ -58,7 +58,7 @@ async function triggerPostScanPipeline() {
     await enrichEntities(unenriched);
   } else {
     console.log('[Scanner] No unenriched entities after scan');
-    finishJob('enrich', { message: '0 to enrich' });
+    finishJob('enrich', '0 to enrich');
   }
 
   const missingUrlEntities = await col('entities')

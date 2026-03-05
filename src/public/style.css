@@ -240,6 +240,7 @@ body {
 .nav-feedback.loading { color: var(--blue); }
 .nav-feedback.success { color: var(--green); }
 .nav-feedback.error { color: var(--red); }
+.nav-feedback.info { color: var(--text-dim); }
 
 /* Pipeline progress */
 .pipeline-progress[hidden] { display: none !important; }

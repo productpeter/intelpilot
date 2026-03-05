@@ -514,7 +514,8 @@ async function pollPipeline() {
         pipelineEmptyJobPolls = 0;
         setStepState('enrich', 'active', `${ej.completed || 0}/${ej.total || '?'} done`);
       } else if (ej?.status === 'done') {
-        setStepState('enrich', 'done', ej.message || 'complete');
+        const msg = typeof ej.message === 'string' ? ej.message : ej.message?.message || 'complete';
+        setStepState('enrich', 'done', msg);
         pipelineEnrichDone = true;
         loadEntities();
       } else if (ej?.status === 'error') {
@@ -537,7 +538,8 @@ async function pollPipeline() {
         pipelineEmptyJobPolls = 0;
         setStepState('report', 'active', rj.message || 'generating…');
       } else if (rj?.status === 'done') {
-        setStepState('report', 'done', rj.message || 'complete');
+        const msg = typeof rj.message === 'string' ? rj.message : rj.message?.message || 'complete';
+        setStepState('report', 'done', msg);
         pipelineReportDone = true;
         loadHistory();
         loadEntities();
@@ -558,10 +560,15 @@ async function pollPipeline() {
     }
 
     if (pipelineScanDone && pipelineEnrichDone && pipelineReportDone) {
-      setFeedback('Pipeline complete — scan, enrich & report done', 'success');
+      const rMsg = jobs.report?.message;
+      const noReport = typeof rMsg === 'string' && rMsg.toLowerCase().includes('no new');
+      const summary = noReport
+        ? 'Pipeline complete — no new startups found this scan'
+        : 'Pipeline complete — scan, enrich & report done';
+      setFeedback(summary, noReport ? 'info' : 'success');
       $('#btn-scan').disabled = false;
       stopPipelinePolling();
-      setTimeout(() => { hidePipeline(); setFeedback('', ''); }, 8000);
+      setTimeout(() => { hidePipeline(); setFeedback('', ''); }, 12000);
     }
   } catch {
     stopPipelinePolling();

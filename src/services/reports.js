@@ -30,7 +30,7 @@ export async function generateWeeklyReport() {
 
   if (entities.length === 0) {
     console.log('[Reports] No new startups — skipping report generation');
-    finishJob('report', { message: 'No new startups to report' });
+    finishJob('report', 'No new startups to report');
     return { items: [], stats: { entities_in_report: 0 } };
   }
 
