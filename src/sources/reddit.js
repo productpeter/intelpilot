@@ -17,7 +17,7 @@ const SUBREDDITS = [
 ];
 
 const SORTS = ['hot', 'new'];
-const UA = { 'User-Agent': 'IntelPilot/1.0' };
+const UA = { 'User-Agent': 'node:intelpilot:v1.0 (startup discovery research tool)' };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -27,7 +27,7 @@ async function fetchSubreddit(sub, limit, sort = 'hot') {
   const perPage = 100;
 
   while (all.length < limit) {
-    let url = `https://www.reddit.com/r/${sub}/${sort}.json?limit=${perPage}`;
+    let url = `https://old.reddit.com/r/${sub}/${sort}.json?limit=${perPage}&raw_json=1`;
     if (after) url += `&after=${after}`;
 
     try {
@@ -75,7 +75,7 @@ export default {
   type: 'html',
 
   async fetchCandidates() {
-    const BATCH_SIZE = 4;
+    const BATCH_SIZE = 2;
     const tasks = SUBREDDITS.flatMap((s) =>
       SORTS.map((sort) => ({ sub: s.sub, limit: s.limit, sort })),
     );
@@ -96,7 +96,7 @@ export default {
           candidates.push(c);
         }
       }
-      if (i + BATCH_SIZE < tasks.length) await sleep(2000);
+      if (i + BATCH_SIZE < tasks.length) await sleep(3000);
     }
 
     console.log(`[Reddit] Fetched ${candidates.length} unique candidates from ${SUBREDDITS.length} subs × ${SORTS.length} sorts`);

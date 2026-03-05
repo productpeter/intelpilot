@@ -144,7 +144,27 @@ export async function runSourceScan(source) {
       const existing = await col('discoveries').findOne({
         candidate_url: candidate.url,
       });
-      if (!existing) newCandidates.push(candidate);
+      if (existing) continue;
+
+      if (candidate.title) {
+        const nameMatch = await col('entities').findOne({
+          name: { $regex: new RegExp(`^${candidate.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        });
+        if (nameMatch) {
+          await col('discoveries').insertOne({
+            source_id: sourceDoc._id,
+            candidate_url: candidate.url,
+            title: candidate.title,
+            meta: candidate.meta || {},
+            discovered_at: new Date(),
+            status: 'skipped_dedup',
+            entity_id: nameMatch._id,
+          });
+          continue;
+        }
+      }
+
+      newCandidates.push(candidate);
     }
     scanRun.counts.new_candidates = newCandidates.length;
     await col('scan_runs').updateOne(
