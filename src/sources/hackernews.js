@@ -13,15 +13,21 @@ export default {
     });
 
     const top = ids.slice(0, 500);
+
+    const BATCH = 50;
     const candidates = [];
-
-    for (const id of top) {
-      try {
-        const { data: item } = await axios.get(`${HN_API}/item/${id}.json`, {
-          timeout: 10_000,
-        });
+    for (let i = 0; i < top.length; i += BATCH) {
+      const batch = top.slice(i, i + BATCH);
+      const results = await Promise.allSettled(
+        batch.map((id) =>
+          axios.get(`${HN_API}/item/${id}.json`, { timeout: 10_000 }),
+        ),
+      );
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status !== 'fulfilled') continue;
+        const item = results[j].value.data;
         if (!item || item.dead || item.deleted) continue;
-
+        const id = batch[j];
         candidates.push({
           url: item.url || `${HN_SHOW_URL}${id}`,
           title: item.title,
@@ -33,8 +39,6 @@ export default {
             posted_at: new Date(item.time * 1000).toISOString(),
           },
         });
-      } catch {
-        continue;
       }
     }
 

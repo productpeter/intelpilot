@@ -2,9 +2,16 @@ import { extractJson } from '../lib/tabstack.js';
 
 const PAGES = [
   'https://venturebeat.com/category/ai/',
+  'https://venturebeat.com/category/ai/page/2/',
+  'https://venturebeat.com/category/ai/page/3/',
   'https://venturebeat.com/category/enterprise-analytics/',
+  'https://venturebeat.com/category/enterprise-analytics/page/2/',
   'https://venturebeat.com/category/data-infrastructure/',
+  'https://venturebeat.com/category/data-infrastructure/page/2/',
   'https://venturebeat.com/category/security/',
+  'https://venturebeat.com/category/security/page/2/',
+  'https://venturebeat.com/category/programming-development/',
+  'https://venturebeat.com/category/games/',
 ];
 
 const SCHEMA = {
@@ -37,12 +44,15 @@ export default {
   type: 'html',
 
   async fetchCandidates() {
+    const seen = new Set();
     const candidates = [];
 
     for (const pageUrl of PAGES) {
       try {
         const result = await extractJson(pageUrl, SCHEMA, { nocache: true });
         for (const article of result.articles || []) {
+          if (!article.url || seen.has(article.url)) continue;
+          seen.add(article.url);
           candidates.push({
             url: article.url,
             title: article.title,

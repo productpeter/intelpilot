@@ -3,8 +3,15 @@ import { extractJson } from '../lib/tabstack.js';
 const PAGES = [
   'https://www.futuretools.io/recently-added',
   'https://www.futuretools.io/',
-  'https://www.futuretools.io/ai-tools?pricing-model=free&sort=most-popular',
   'https://www.futuretools.io/ai-tools?sort=most-popular',
+  'https://www.futuretools.io/ai-tools?sort=most-popular&page=2',
+  'https://www.futuretools.io/ai-tools?sort=most-popular&page=3',
+  'https://www.futuretools.io/ai-tools?pricing-model=free&sort=most-popular',
+  'https://www.futuretools.io/ai-tools?pricing-model=free&sort=most-popular&page=2',
+  'https://www.futuretools.io/ai-tools?pricing-model=freemium&sort=most-popular',
+  'https://www.futuretools.io/ai-tools?pricing-model=freemium&sort=most-popular&page=2',
+  'https://www.futuretools.io/ai-tools?sort=newest',
+  'https://www.futuretools.io/ai-tools?sort=newest&page=2',
 ];
 
 const SCHEMA = {
@@ -33,6 +40,7 @@ export default {
   type: 'html',
 
   async fetchCandidates() {
+    const seen = new Set();
     const candidates = [];
 
     for (const pageUrl of PAGES) {
@@ -43,8 +51,11 @@ export default {
           if (url && !url.startsWith('http')) {
             url = `https://www.futuretools.io${url.startsWith('/') ? '' : '/'}${url}`;
           }
+          const finalUrl = url || 'https://www.futuretools.io';
+          if (seen.has(finalUrl)) continue;
+          seen.add(finalUrl);
           candidates.push({
-            url: url || `https://www.futuretools.io`,
+            url: finalUrl,
             title: tool.name,
             meta: {
               description: tool.description,

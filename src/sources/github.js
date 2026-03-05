@@ -2,10 +2,16 @@ import { extractJson } from '../lib/tabstack.js';
 
 const PAGES = [
   { url: 'https://github.com/trending?since=daily', label: 'GitHub Trending Daily' },
-  { url: 'https://github.com/trending?since=weekly&spoken_language_code=en', label: 'GitHub Trending Weekly' },
+  { url: 'https://github.com/trending?since=weekly', label: 'GitHub Trending Weekly' },
   { url: 'https://github.com/trending?since=monthly', label: 'GitHub Trending Monthly' },
-  { url: 'https://github.com/trending/python?since=daily', label: 'GitHub Trending Python' },
-  { url: 'https://github.com/trending/typescript?since=daily', label: 'GitHub Trending TypeScript' },
+  { url: 'https://github.com/trending/python?since=daily', label: 'GitHub Trending Python Daily' },
+  { url: 'https://github.com/trending/python?since=weekly', label: 'GitHub Trending Python Weekly' },
+  { url: 'https://github.com/trending/typescript?since=daily', label: 'GitHub Trending TS Daily' },
+  { url: 'https://github.com/trending/typescript?since=weekly', label: 'GitHub Trending TS Weekly' },
+  { url: 'https://github.com/trending/javascript?since=daily', label: 'GitHub Trending JS Daily' },
+  { url: 'https://github.com/trending/javascript?since=weekly', label: 'GitHub Trending JS Weekly' },
+  { url: 'https://github.com/trending/go?since=daily', label: 'GitHub Trending Go Daily' },
+  { url: 'https://github.com/trending/rust?since=daily', label: 'GitHub Trending Rust Daily' },
 ];
 
 const SCHEMA = {

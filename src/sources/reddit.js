@@ -20,18 +20,25 @@ const SORTS = ['hot', 'new'];
 const UA = { 'User-Agent': 'IntelPilot/1.0' };
 
 async function fetchSubreddit(sub, limit, sort = 'hot') {
-  const url = `https://www.reddit.com/r/${sub}/${sort}.json?limit=${limit}`;
-  const { data } = await axios.get(url, { headers: UA, timeout: 15_000 });
-  const posts = data?.data?.children || [];
+  const all = [];
+  let after = null;
+  const perPage = 100;
 
-  return posts
-    .filter((p) => p.data && !p.data.stickied)
-    .map((p) => {
+  while (all.length < limit) {
+    let url = `https://www.reddit.com/r/${sub}/${sort}.json?limit=${perPage}`;
+    if (after) url += `&after=${after}`;
+
+    const { data } = await axios.get(url, { headers: UA, timeout: 15_000 });
+    const posts = data?.data?.children || [];
+    if (!posts.length) break;
+
+    for (const p of posts) {
+      if (!p.data || p.data.stickied) continue;
       const d = p.data;
       const isExternal = d.url && !d.url.includes('reddit.com');
       const redditUrl = `https://www.reddit.com${d.permalink}`;
 
-      return {
+      all.push({
         url: isExternal ? d.url : redditUrl,
         title: d.title,
         meta: {
@@ -45,8 +52,14 @@ async function fetchSubreddit(sub, limit, sort = 'hot') {
           snippet: (d.selftext || '').slice(0, 500) || null,
           tags: [sub, d.link_flair_text].filter(Boolean),
         },
-      };
-    });
+      });
+    }
+
+    after = data?.data?.after;
+    if (!after) break;
+  }
+
+  return all.slice(0, limit);
 }
 
 export default {

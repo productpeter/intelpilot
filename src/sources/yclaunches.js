@@ -5,6 +5,12 @@ const PAGES = [
   'https://www.ycombinator.com/companies?batch=W25&status=Active',
   'https://www.ycombinator.com/companies?batch=S24&status=Active',
   'https://www.ycombinator.com/companies?batch=W24&status=Active',
+  'https://www.ycombinator.com/companies?batch=S23&status=Active',
+  'https://www.ycombinator.com/companies?batch=W23&status=Active',
+  'https://www.ycombinator.com/companies?batch=S25&status=Active',
+  'https://www.ycombinator.com/companies?tags=AI&status=Active',
+  'https://www.ycombinator.com/companies?tags=Developer+Tools&status=Active',
+  'https://www.ycombinator.com/companies?tags=SaaS&status=Active',
 ];
 
 const SCHEMA = {
