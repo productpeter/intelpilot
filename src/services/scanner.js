@@ -21,6 +21,8 @@ function withTimeout(promise, ms, label) {
 export async function runFullScan() {
   console.log('[Scanner] Starting full scan (concurrent)…');
   const sources = getAllSources();
+  startJob('scan');
+  updateJob('scan', { total: sources.length, message: 'Crawling sources…' });
 
   const settled = await Promise.allSettled(
     sources.map((source) =>
@@ -34,6 +36,8 @@ export async function runFullScan() {
       : { source: sources[i].name, error: r.reason?.message },
   );
 
+  const ok = results.filter((r) => !r.error).length;
+  finishJob('scan', `${ok}/${sources.length} sources completed`);
   console.log('[Scanner] Full scan complete — starting post-scan pipeline…');
 
   try {

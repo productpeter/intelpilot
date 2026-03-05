@@ -493,18 +493,18 @@ async function pollPipeline() {
 
     if (!pipelineScanDone) {
       const c = scanData.counts || {};
-      if (scanData.is_running) {
-        const detail = c.new_candidates
-          ? `${c.candidates || 0} sources crawled · ${c.new_candidates} unseen · ${c.success || 0} extracted`
-          : `${c.candidates || 0} sources crawled · ${c.success || 0} extracted`;
-        setStepState('scan', 'active', detail);
-      } else {
-        const doneDetail = c.new_candidates
-          ? `${c.candidates || 0} sources crawled · ${c.new_candidates} unseen`
-          : `${c.candidates || 0} sources crawled · ${c.success || 0} extracted`;
-        setStepState('scan', 'done', doneDetail);
+      const sj = jobs.scan;
+      const scanDone = sj?.status === 'done' || sj?.status === 'error';
+      const detail = c.new_candidates
+        ? `${c.candidates || 0} sources crawled · ${c.new_candidates} unseen · ${c.success || 0} extracted`
+        : `${c.candidates || 0} sources crawled · ${c.success || 0} extracted`;
+
+      if (scanDone) {
+        setStepState('scan', 'done', detail);
         pipelineScanDone = true;
         loadEntities();
+      } else if (sj?.status === 'running' || scanData.is_running) {
+        setStepState('scan', 'active', detail);
       }
     }
 
@@ -696,7 +696,9 @@ async function checkRunningPipeline() {
       api('GET', '/admin/jobs'),
     ]);
 
-    const scanRunning = scanData.is_running;
+    const scanJobActive = jobs.scan?.status === 'running';
+    const scanRunsActive = scanData.is_running;
+    const scanRunning = scanJobActive || scanRunsActive;
     const enrichRunning = jobs.enrich?.status === 'running';
     const reportRunning = jobs.report?.status === 'running';
 
@@ -705,7 +707,7 @@ async function checkRunningPipeline() {
     $('#btn-scan').disabled = true;
     showPipeline();
 
-    if (scanRunning) {
+    if (scanRunning && !enrichRunning && !reportRunning) {
       pipelineScanDone = false;
       pipelineEnrichDone = false;
       pipelineReportDone = false;
