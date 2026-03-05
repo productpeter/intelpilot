@@ -42,7 +42,7 @@ IMPORTANT:
 - For _source fields: provide the specific URL from the research text where the data was cited. If no URL is available for a metric, use null.
 - For recent_news: only include real articles with actual URLs from the research text. Do not invent articles.`;
 
-const ENRICHMENT_CONCURRENCY = 3;
+const ENRICHMENT_CONCURRENCY = 20;
 
 export async function enrichEntities(entities) {
   console.log(`[Enricher] Starting enrichment for ${entities.length} entities…`);
