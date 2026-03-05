@@ -216,4 +216,19 @@ router.delete('/reports/empty', async (req, res) => {
   res.json({ deleted: result.deletedCount });
 });
 
+router.delete('/entities/no-domain', async (req, res) => {
+  try {
+    const match = { $or: [{ domain: { $exists: false } }, { domain: null }, { domain: '' }, { domain: 'n/a' }] };
+    const toDelete = await col('entities').find(match).toArray();
+    const ids = toDelete.map((e) => e._id);
+    if (!ids.length) return res.json({ deleted: 0 });
+    await col('signals').deleteMany({ entity_id: { $in: ids } });
+    await col('evidence').deleteMany({ entity_id: { $in: ids } });
+    const result = await col('entities').deleteMany({ _id: { $in: ids } });
+    res.json({ deleted: result.deletedCount, names: toDelete.map((e) => e.name) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
