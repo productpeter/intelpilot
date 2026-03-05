@@ -34,11 +34,13 @@ export async function runFullScan() {
       : { source: sources[i].name, error: r.reason?.message },
   );
 
-  console.log('[Scanner] Full scan complete');
+  console.log('[Scanner] Full scan complete — starting post-scan pipeline…');
 
-  triggerPostScanPipeline().catch((err) =>
-    console.error('[Scanner] Post-scan pipeline error:', err.message),
-  );
+  try {
+    await triggerPostScanPipeline();
+  } catch (err) {
+    console.error('[Scanner] Post-scan pipeline error:', err.message);
+  }
 
   return results;
 }
@@ -50,7 +52,7 @@ async function triggerPostScanPipeline() {
   const unenriched = await col('entities')
     .find({ 'classification.is_startup': true, enrichment: { $exists: false } })
     .sort({ updated_at: -1 })
-    .limit(30)
+    .limit(50)
     .toArray();
 
   if (unenriched.length) {
