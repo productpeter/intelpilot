@@ -1,5 +1,4 @@
 import { col } from '../db/mongo.js';
-import { enrichEntities } from './enricher.js';
 import { isValidProductUrl } from './extractor.js';
 import { startJob, updateJob, finishJob } from './progress.js';
 
@@ -35,25 +34,13 @@ export async function generateWeeklyReport() {
     return { items: [], stats: { entities_in_report: 0 } };
   }
 
-  const toEnrich = entities.filter((e) => !e.enrichment);
-  if (toEnrich.length > 0) {
-    console.log(`[Reports] Awaiting enrichment for ${toEnrich.length} entities…`);
-    updateJob('report', { message: `Enriching ${toEnrich.length} entities…` });
-    await enrichEntities(toEnrich);
-  }
-
   updateJob('report', { message: `Building report for ${entities.length} entities…` });
 
   const reportItems = [];
 
   for (const entity of entities) {
-    const fresh = toEnrich.some((e) => e._id.equals(entity._id))
-      ? await col('entities').findOne({ _id: entity._id })
-      : entity;
-    if (!fresh) continue;
-
     const discoveries = await col('discoveries')
-      .find({ entity_id: fresh._id })
+      .find({ entity_id: entity._id })
       .sort({ discovered_at: -1 })
       .limit(20)
       .toArray();
@@ -61,7 +48,7 @@ export async function generateWeeklyReport() {
     const sourceLabels = buildSourceLabels(discoveries);
 
     const signals = await col('signals')
-      .find({ entity_id: fresh._id })
+      .find({ entity_id: entity._id })
       .sort({ captured_at: -1 })
       .limit(30)
       .toArray();
@@ -76,18 +63,18 @@ export async function generateWeeklyReport() {
       return found.length ? [...new Set(found.map((s) => s.value_text))].join('; ') : null;
     };
 
-    const em = fresh.enrichment?.metrics;
-    const category = fresh.classification?.category;
+    const em = entity.enrichment?.metrics;
+    const category = entity.classification?.category;
     const firstDiscovery = discoveries.length
       ? discoveries[discoveries.length - 1].discovered_at
-      : fresh.created_at;
+      : entity.created_at;
 
     reportItems.push({
-      entity_id: fresh._id,
-      entity_name: fresh.name,
-      domain: fresh.canonical_domain,
-      description: fresh.description,
-      tags: fresh.tags,
+      entity_id: entity._id,
+      entity_name: entity.name,
+      domain: entity.canonical_domain,
+      description: entity.description,
+      tags: entity.tags,
       category,
       revenue: pick('revenue_claim') || em?.revenue,
       funding: pick('funding_raised') || em?.funding,
@@ -95,7 +82,7 @@ export async function generateWeeklyReport() {
       users: pick('user_count') || pick('customer_count_claim') || em?.user_count,
       team: pick('team_size') || em?.team_size,
       notable: em?.notable || null,
-      website: resolveReportWebsite(fresh, em, evidenceDocs),
+      website: resolveReportWebsite(entity, em, evidenceDocs),
       source_labels: sourceLabels,
       discovered_at: firstDiscovery,
       signals: signals.map((s) => ({

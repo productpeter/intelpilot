@@ -56,41 +56,38 @@ async function triggerPostScanPipeline() {
     console.log('[Scanner] No unenriched entities after scan');
   }
 
-  const badUrlEntities = await col('entities')
+  const missingUrlEntities = await col('entities')
     .find({
       'classification.is_startup': true,
-      'enrichment': { $exists: true },
       'enrichment.metrics.website': { $ne: null },
+      $or: [{ website_url: null }, { website_url: '' }, { website_url: { $exists: false } }],
     })
+    .project({ name: 1, website_url: 1, 'enrichment.metrics.website': 1 })
     .toArray();
 
-  const needsReenrich = badUrlEntities.filter((e) => {
-    const current = e.website_url;
-    if (!current) return true;
-    return !isValidProductUrl(current);
-  });
-
-  if (needsReenrich.length) {
-    console.log(`[Scanner] Re-enriching ${needsReenrich.length} entities with bad URLs…`);
-    for (const e of needsReenrich) {
-      let url = e.enrichment.metrics.website;
-      if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
-      if (url && isValidProductUrl(url)) {
-        await col('entities').updateOne({ _id: e._id }, { $set: { website_url: url } });
-        console.log(`[Scanner] Fixed URL for "${e.name}": ${e.website_url} → ${url}`);
-      }
+  let urlsFixed = 0;
+  for (const e of missingUrlEntities) {
+    let url = e.enrichment.metrics.website;
+    if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+    if (url && isValidProductUrl(url)) {
+      await col('entities').updateOne({ _id: e._id }, { $set: { website_url: url } });
+      console.log(`[Scanner] Fixed URL for "${e.name}": → ${url}`);
+      urlsFixed++;
     }
   }
+  if (urlsFixed) console.log(`[Scanner] Fixed ${urlsFixed} missing URLs`);
 
-  const genericNames = await col('entities')
+  const recentlyEnriched = await col('entities')
     .find({
       'classification.is_startup': true,
       'enrichment.metrics.matched_name': { $ne: null },
+      'enrichment.enriched_at': { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
     })
+    .project({ name: 1, website_url: 1, classification: 1, 'enrichment.metrics.matched_name': 1 })
     .toArray();
 
   let namesFixed = 0;
-  for (const e of genericNames) {
+  for (const e of recentlyEnriched) {
     const matched = (e.enrichment.metrics.matched_name || '').trim();
     const fixed = betterName(e.name, e.classification?.clean_name, matched, e.website_url);
     if (!fixed) continue;
