@@ -55,7 +55,7 @@ router.get('/scan/status', async (req, res) => {
     is_running: running.length > 0,
     running_count: running.length,
     latest,
-    recent_runs: runs.slice(0, 10),
+    recent_runs: runs,
     counts: batchCounts,
   });
 });
