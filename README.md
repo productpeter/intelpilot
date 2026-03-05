@@ -39,7 +39,7 @@ This MVP covers **discovery + classification + enrichment + report generation**.
 
 ## How It Works
 
-1. **Scan** — Fetches candidates from 11 sources / ~35 channels (Product Hunt 3-day leaderboard, Hacker News Show HN top 100, 7 RSS/web feeds, 13 Reddit subreddits × 2 sorts, BetaList, FutureTools, TechCrunch, AI Tools Directories, YC Launches, GitHub Trending, VentureBeat) with a 10-minute per-source timeout
+1. **Scan** — Fetches candidates from 11 sources / ~130+ channels (Product Hunt 15-day leaderboard, Hacker News Show HN top 500, 11 RSS/web feeds, 13 Reddit subreddits × 2 sorts with pagination, BetaList 3 pages, FutureTools 11 pages, TechCrunch 16 pages, AI Tools Directories 23 pages, YC Launches 10 pages, GitHub Trending 11 pages, VentureBeat 11 pages) with a 20-minute per-source timeout
 2. **Extract** — Uses Tabstack API to pull structured data from each candidate URL (including explicit product website URL detection)
 3. **Classify** — OpenAI `gpt-4o-mini` classifies each entity: is it an AI startup with an identifiable product name?
 4. **Deduplicate** — Three-tier entity resolution (domain match → name match → vector similarity via Atlas Vector Search)
@@ -98,19 +98,19 @@ src/
 │   └── namefix.js           # Entity name correction (generic → enrichment matched_name)
 ├── sources/
 │   ├── index.js             # Source registry
-│   ├── producthunt.js       # Product Hunt 3-day leaderboard (via Tabstack extract)
-│   ├── hackernews.js        # Hacker News Show HN (top 100, Firebase API)
-│   ├── rss.js               # TLDR AI, HN Newest, HN Front Page, TAAFT (new/saved/trending/featured)
-│   ├── reddit.js            # 13 subreddits × hot+new sorts (Reddit JSON API)
-│   ├── betalist.js          # BetaList new startups (via Tabstack extract)
-│   ├── futuretools.js       # FutureTools AI directory (via Tabstack extract)
-│   ├── techcrunch.js        # TechCrunch AI/startups/venture articles (via Tabstack extract)
-│   ├── aitoolsdirectory.js  # Toolify, aitools.fyi, TopAI.tools, Uneed, SaaSHub (via Tabstack extract)
-│   ├── yclaunches.js        # Y Combinator launches + latest batch (via Tabstack extract)
-│   ├── github.js            # GitHub Trending daily + weekly (via Tabstack extract)
-│   └── venturebeat.js       # VentureBeat AI + enterprise articles (via Tabstack extract)
+│   ├── producthunt.js       # Product Hunt 15-day leaderboard (via Tabstack extract)
+│   ├── hackernews.js        # Hacker News Show HN (top 500, Firebase API, batched 50 at a time)
+│   ├── rss.js               # 11 feeds: TLDR AI/Founders/WebDev, HN×3, TAAFT×4, Ben's Bites
+│   ├── reddit.js            # 13 subreddits × hot+new, paginated (batched 4 subs at a time)
+│   ├── betalist.js          # BetaList 3 pages: startups, AI market, SaaS market
+│   ├── futuretools.js       # FutureTools 11 pages (popular, newest, freemium + pagination)
+│   ├── techcrunch.js        # TechCrunch 16 pages (7 categories × pagination)
+│   ├── aitoolsdirectory.js  # 23 pages across Toolify, aitools.fyi, TopAI.tools, Uneed, SaaSHub
+│   ├── yclaunches.js        # YC 10 pages (launches + 5 batches + AI/DevTools/SaaS tags)
+│   ├── github.js            # GitHub Trending 11 pages (3 periods × 6 languages)
+│   └── venturebeat.js       # VentureBeat 11 pages (6 categories × pagination)
 ├── services/
-│   ├── scanner.js           # Concurrent scan orchestration (10-min per-source timeout) + auto-enrich + URL/name fix + auto-report
+│   ├── scanner.js           # Concurrent scan orchestration (20-min per-source timeout) + auto-enrich + URL/name fix + auto-report
 │   ├── extractor.js         # Tabstack extraction + product URL resolution + classifier integration
 │   ├── classifier.js        # LLM startup classification (gpt-4o-mini)
 │   ├── enricher.js          # Tabstack /research enrichment + name validation + bad URL override + dead domain detection
@@ -224,7 +224,7 @@ The server connects to MongoDB, ensures indexes, starts cron jobs, and listens o
 | `/api/entities/:id` | GET | Entity detail with signals + evidence |
 | `/report` | GET | Latest report rendered as a standalone HTML page |
 | `/report/:id` | GET | Specific report by ID rendered as HTML |
-| `/api/admin/scan/status` | GET | Live scan progress (running state, counts, recent runs). Auto-cleans stale runs (>5 min) |
+| `/api/admin/scan/status` | GET | Live scan progress (running state, counts, recent runs with source names). Auto-cleans stale runs (>25 min) |
 | `/api/admin/jobs` | GET | Live progress for all operations (scan, report, enrich) |
 | `/api/admin/scan/triggers` | GET | Last 20 scan trigger records (IP, user-agent, referer, timestamp) |
 
@@ -243,21 +243,25 @@ Require `Authorization: Bearer <ADMIN_TOKEN>` header (skipped in dev if token is
 
 ## Sources
 
-| # | Source | Method | Pages | Candidates | What it finds |
+| # | Source | Method | Pages | Typical yield | What it finds |
 | --- | --- | --- | --- | --- | --- |
-| 1 | **Product Hunt** | Tabstack JSON extraction on daily leaderboard | 3 (today + 2 prior days) | ~60 | Product names, taglines, upvotes, websites, topics |
-| 2 | **Hacker News Show HN** | HN Firebase API | 1 (top 100 stories) | 100 | Titles, URLs, points, authors, comment counts |
-| 3 | **RSS / Web Feeds** | Tabstack JSON extraction | 7 (TLDR AI, HN×2, TAAFT×4) | ~100 | Newsletter articles, new/trending/saved/featured AI tools |
-| 4 | **Reddit** (13 subreddits) | Reddit JSON API | 26 (13 subs × hot+new) | ~700 | r/SaaS, r/startups, r/indiehackers, r/artificial, r/LocalLLaMA, r/machinelearning, r/ChatGPT, r/singularity, r/OpenAI, r/AItools, r/Entrepreneur, r/microsaas, r/selfhosted |
-| 5 | **BetaList** | Tabstack JSON extraction | 1 | ~20 | Startup names, taglines, tags, URLs |
-| 6 | **FutureTools** | Tabstack JSON extraction | 2 | ~80 | AI tool names, descriptions, categories, URLs |
-| 7 | **TechCrunch** | Tabstack JSON extraction | 4 (AI, generative-ai, startups, venture) | ~80 | Startup names, funding rounds, descriptions |
-| 8 | **AI Directories** | Tabstack JSON extraction | 7 (Toolify×2, aitools.fyi×2, TopAI.tools, Uneed, SaaSHub) | ~100 | AI tool/SaaS listings, descriptions, categories, URLs |
-| 9 | **YC Launches** | Tabstack JSON extraction | 2 (launches + latest batch) | ~40 | YC-backed startup names, taglines, batch, categories |
-| 10 | **GitHub Trending** | Tabstack JSON extraction | 2 (daily + weekly) | ~50 | Trending repos, descriptions, stars, languages |
-| 11 | **VentureBeat** | Tabstack JSON extraction | 2 (AI + enterprise) | ~40 | Startup articles, funding, descriptions |
+| 1 | **Product Hunt** | Tabstack JSON extraction on daily leaderboard | 15 (today + 14 prior days) | ~30-35 | Product names, taglines, upvotes, websites, topics |
+| 2 | **Hacker News Show HN** | HN Firebase API (batched 50 concurrent) | 1 (top 500 stories) | ~180 | Titles, URLs, points, authors, comment counts |
+| 3 | **RSS / Web Feeds** | Tabstack JSON extraction | 11 (TLDR AI/Founders/WebDev, HN×3, TAAFT×4, Ben's Bites) | ~90 | Newsletter articles, new/trending/saved/featured AI tools, founder resources |
+| 4 | **Reddit** (13 subreddits) | Reddit JSON API with pagination | 26+ (13 subs × hot+new, paginated, batched 4 at a time) | ~0* | r/SaaS, r/startups, r/indiehackers, r/artificial, r/LocalLLaMA, r/machinelearning, r/ChatGPT, r/singularity, r/OpenAI, r/AItools, r/Entrepreneur, r/microsaas, r/selfhosted |
+| 5 | **BetaList** | Tabstack JSON extraction | 3 (startups, AI market, SaaS market) | ~33 | Startup names, taglines, tags, URLs |
+| 6 | **FutureTools** | Tabstack JSON extraction | 11 (popular, newest, freemium + pagination) | ~100 | AI tool names, descriptions, categories, URLs |
+| 7 | **TechCrunch** | Tabstack JSON extraction | 16 (7 categories × pagination) | ~120 | Startup names, funding rounds, descriptions |
+| 8 | **AI Directories** | Tabstack JSON extraction | 23 (Toolify×5, aitools.fyi×6, TopAI.tools×2, Uneed×2, SaaSHub×4) | ~170 | AI tool/SaaS listings, descriptions, categories, URLs |
+| 9 | **YC Launches** | Tabstack JSON extraction | 10 (launches + 5 batches + AI/DevTools/SaaS tags) | ~190 | YC-backed startup names, taglines, batch, categories |
+| 10 | **GitHub Trending** | Tabstack JSON extraction | 11 (daily/weekly/monthly × 6 languages) | ~125 | Trending repos, descriptions, stars, languages |
+| 11 | **VentureBeat** | Tabstack JSON extraction | 11 (6 categories × pagination) | ~100 | Startup articles, funding, descriptions |
 
-All 11 sources run concurrently during scans with a **10-minute per-source timeout** — if any source hangs, the pipeline proceeds without it. Reddit fetches all subreddits × sorts in parallel using the public JSON API with per-source URL dedup. Reddit self-posts are processed directly from their content without Tabstack to avoid Reddit bot detection. Product Hunt deduplicates across the 3-day window.
+\* Reddit is currently rate-limited; pagination + batching fix deployed but not yet verified.
+
+All 11 sources run concurrently during scans with a **20-minute per-source timeout** — if any source hangs, the pipeline proceeds without it. A 25-minute stale cleanup threshold marks orphaned scan runs as failed (safety net for server crashes). Reddit uses paginated fetches with the `after` cursor (API caps at 100/request), batched 4 subreddits at a time with 2s inter-batch delay and 1s inter-page delay to avoid rate-limiting. Hacker News fetches 500 stories in parallel batches of 50. All Tabstack-based sources include URL deduplication across pages. Product Hunt deduplicates across the 15-day window.
+
+**Actual scan yield:** ~1,000-1,150 candidates per scan. Of these, ~10-15% are new (unseen) on each run, and ~50-70 get successfully extracted and classified. Each scan typically adds **30-50 new startup entities** to the database. Most candidates are repeats from prior scans — the same HN stories, Reddit posts, and directory listings don't change daily.
 
 ---
 
@@ -265,8 +269,8 @@ All 11 sources run concurrently during scans with a **10-minute per-source timeo
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  STEP 1: SCAN (10-min per-source timeout)                    │
-│  11 sources (~1300 candidates per scan, all concurrent)      │
+│  STEP 1: SCAN (20-min per-source timeout)                    │
+│  11 sources (~1000-1150 candidates per scan, all concurrent) │
 │  PH │ HN │ RSS │ Reddit │ BetaList │ FT │ TC │ AITD │ YC │   │
 │  GitHub │ VentureBeat                                        │
 │                                                              │
@@ -588,7 +592,7 @@ The app serves an embedded dashboard at `/` — no separate frontend build or de
 - **Pipeline Persistence** — refreshing the page mid-scan automatically detects and resumes progress tracking
 - **Smart Entity Names** — frontend `bestName()` picks the best non-generic name across `clean_name`, `matched_name`, and `name`
 - **Startup Reports** — unified dropdown in the navbar listing all reports (latest highlighted); each opens in an in-app dark-themed modal
-- **Stale Run Cleanup** — scan runs stuck for 5+ minutes are auto-marked as failed; per-source 10-minute timeout prevents pipeline stalls
+- **Stale Run Cleanup** — scan runs stuck for 25+ minutes are auto-marked as failed; per-source 20-minute timeout prevents pipeline stalls
 - **Scan Audit Logging** — every scan trigger is logged with IP, user-agent, and referer for audit
 - **Tech Stack** — footer showing all technologies used
 - **Responsive** — mobile-friendly with scrollable navbar, horizontal pipeline step cards, and single-column grid
