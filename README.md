@@ -39,11 +39,11 @@ This MVP covers **discovery + classification + enrichment + report generation**.
 
 ## How It Works
 
-1. **Scan** — Fetches candidates from 8 sources / ~20 channels (Product Hunt, Hacker News top 40, 4 RSS/web feeds, 10 Reddit subreddits, BetaList, FutureTools, TechCrunch, AI Tools Directory) with a 10-minute per-source timeout
+1. **Scan** — Fetches candidates from 11 sources / ~35 channels (Product Hunt 3-day leaderboard, Hacker News Show HN top 100, 7 RSS/web feeds, 13 Reddit subreddits × 2 sorts, BetaList, FutureTools, TechCrunch, AI Tools Directories, YC Launches, GitHub Trending, VentureBeat) with a 10-minute per-source timeout
 2. **Extract** — Uses Tabstack API to pull structured data from each candidate URL (including explicit product website URL detection)
 3. **Classify** — OpenAI `gpt-4o-mini` classifies each entity: is it an AI startup with an identifiable product name?
 4. **Deduplicate** — Three-tier entity resolution (domain match → name match → vector similarity via Atlas Vector Search)
-5. **Enrich** — Unenriched entities are automatically researched via Tabstack `/research` endpoint, then metrics are extracted with GPT (with name-matching validation and dead domain detection)
+5. **Enrich** — All unenriched startup entities are automatically researched via Tabstack `/research` endpoint (no cap), then metrics are extracted with GPT (with name-matching validation and dead domain detection)
 6. **Verify** — Entities enriched but with no web presence are heavily penalized; parked/dead domains are auto-delisted
 7. **Report** — Automatically generated after enrichment; shows only **newly discovered startups since the last report**, sorted chronologically (newest first), with source badges and discovery timestamps
 
@@ -98,14 +98,17 @@ src/
 │   └── namefix.js           # Entity name correction (generic → enrichment matched_name)
 ├── sources/
 │   ├── index.js             # Source registry
-│   ├── producthunt.js       # Product Hunt daily leaderboard
-│   ├── hackernews.js        # Hacker News Show HN (top 40, Firebase API)
-│   ├── rss.js               # TLDR AI, HN Newest, HN Front Page, There's An AI For That
-│   ├── reddit.js            # 10 subreddits (SaaS, startups, indiehackers, artificial, LocalLLaMA, machinelearning, ChatGPT, singularity, OpenAI, AItools)
+│   ├── producthunt.js       # Product Hunt 3-day leaderboard (via Tabstack extract)
+│   ├── hackernews.js        # Hacker News Show HN (top 100, Firebase API)
+│   ├── rss.js               # TLDR AI, HN Newest, HN Front Page, TAAFT (new/saved/trending/featured)
+│   ├── reddit.js            # 13 subreddits × hot+new sorts (Reddit JSON API)
 │   ├── betalist.js          # BetaList new startups (via Tabstack extract)
 │   ├── futuretools.js       # FutureTools AI directory (via Tabstack extract)
-│   ├── techcrunch.js        # TechCrunch AI/startup articles (via Tabstack extract)
-│   └── aitoolsdirectory.js  # AI Tools Directory listings (via Tabstack extract)
+│   ├── techcrunch.js        # TechCrunch AI/startups/venture articles (via Tabstack extract)
+│   ├── aitoolsdirectory.js  # Toolify, aitools.fyi, TopAI.tools, Uneed, SaaSHub (via Tabstack extract)
+│   ├── yclaunches.js        # Y Combinator launches + latest batch (via Tabstack extract)
+│   ├── github.js            # GitHub Trending daily + weekly (via Tabstack extract)
+│   └── venturebeat.js       # VentureBeat AI + enterprise articles (via Tabstack extract)
 ├── services/
 │   ├── scanner.js           # Concurrent scan orchestration (10-min per-source timeout) + auto-enrich + URL/name fix + auto-report
 │   ├── extractor.js         # Tabstack extraction + product URL resolution + classifier integration
@@ -231,7 +234,7 @@ Require `Authorization: Bearer <ADMIN_TOKEN>` header (skipped in dev if token is
 
 | Endpoint | Method | Description |
 | --- | --- | --- |
-| `/api/admin/scan/run` | POST | Trigger full pipeline: scan → enrich → URL/name fix → report (returns immediately, runs in background). **15-minute cooldown** between API triggers; cron bypasses cooldown. Logs IP/UA/referer to `scan_triggers` collection |
+| `/api/admin/scan/run` | POST | Trigger full pipeline: scan → enrich → URL/name fix → report (returns immediately, runs in background). Logs IP/UA/referer to `scan_triggers` collection |
 | `/api/admin/report/generate` | POST | Generate a report manually (awaits enrichment, then builds HTML) |
 | `/api/admin/enrich` | POST | Manually trigger enrichment. Query: `?limit=15` |
 | `/api/admin/fix-urls` | POST | Bulk-sync entity `website_url` from enrichment data + fix generic/wrong entity names |
@@ -240,18 +243,21 @@ Require `Authorization: Bearer <ADMIN_TOKEN>` header (skipped in dev if token is
 
 ## Sources
 
-| # | Source | Method | Candidates | What it finds |
-| --- | --- | --- | --- | --- |
-| 1 | **Product Hunt** | Tabstack JSON extraction on daily leaderboard | ~20 | Product names, taglines, upvotes, websites, topics |
-| 2 | **Hacker News Show HN** | HN Firebase API (top 40 stories) | 40 | Titles, URLs, points, authors, comment counts |
-| 3 | **RSS / Web Feeds** | Tabstack JSON extraction | ~60 | TLDR AI, HN Newest, HN Front Page, There's An AI For That |
-| 4 | **Reddit** (10 subreddits) | Reddit JSON API | ~360 | r/SaaS (50), r/startups (50), r/indiehackers (50), r/artificial (40), r/LocalLLaMA (40), r/machinelearning (30), r/ChatGPT (30), r/singularity (20), r/OpenAI (20), r/AItools (30) |
-| 5 | **BetaList** | Tabstack JSON extraction on betalist.com/startups | ~20 | Startup names, taglines, tags, URLs |
-| 6 | **FutureTools** | Tabstack JSON extraction on futuretools.io | ~80 | AI tool names, descriptions, categories, URLs |
-| 7 | **TechCrunch** | Tabstack JSON extraction on AI/startup articles | ~40 | Startup names, funding, descriptions |
-| 8 | **AI Tools Directory** | Tabstack JSON extraction on aitoolsdirectory.com | ~20 | AI tool listings, descriptions, URLs |
+| # | Source | Method | Pages | Candidates | What it finds |
+| --- | --- | --- | --- | --- | --- |
+| 1 | **Product Hunt** | Tabstack JSON extraction on daily leaderboard | 3 (today + 2 prior days) | ~60 | Product names, taglines, upvotes, websites, topics |
+| 2 | **Hacker News Show HN** | HN Firebase API | 1 (top 100 stories) | 100 | Titles, URLs, points, authors, comment counts |
+| 3 | **RSS / Web Feeds** | Tabstack JSON extraction | 7 (TLDR AI, HN×2, TAAFT×4) | ~100 | Newsletter articles, new/trending/saved/featured AI tools |
+| 4 | **Reddit** (13 subreddits) | Reddit JSON API | 26 (13 subs × hot+new) | ~700 | r/SaaS, r/startups, r/indiehackers, r/artificial, r/LocalLLaMA, r/machinelearning, r/ChatGPT, r/singularity, r/OpenAI, r/AItools, r/Entrepreneur, r/microsaas, r/selfhosted |
+| 5 | **BetaList** | Tabstack JSON extraction | 1 | ~20 | Startup names, taglines, tags, URLs |
+| 6 | **FutureTools** | Tabstack JSON extraction | 2 | ~80 | AI tool names, descriptions, categories, URLs |
+| 7 | **TechCrunch** | Tabstack JSON extraction | 4 (AI, generative-ai, startups, venture) | ~80 | Startup names, funding rounds, descriptions |
+| 8 | **AI Directories** | Tabstack JSON extraction | 7 (Toolify×2, aitools.fyi×2, TopAI.tools, Uneed, SaaSHub) | ~100 | AI tool/SaaS listings, descriptions, categories, URLs |
+| 9 | **YC Launches** | Tabstack JSON extraction | 2 (launches + latest batch) | ~40 | YC-backed startup names, taglines, batch, categories |
+| 10 | **GitHub Trending** | Tabstack JSON extraction | 2 (daily + weekly) | ~50 | Trending repos, descriptions, stars, languages |
+| 11 | **VentureBeat** | Tabstack JSON extraction | 2 (AI + enterprise) | ~40 | Startup articles, funding, descriptions |
 
-All 8 sources run concurrently during scans with a **10-minute per-source timeout** — if any source hangs, the pipeline proceeds without it. Reddit fetches from all 10 subreddits in parallel using the public JSON API. Reddit self-posts are processed directly from their content without Tabstack to avoid Reddit bot detection.
+All 11 sources run concurrently during scans with a **10-minute per-source timeout** — if any source hangs, the pipeline proceeds without it. Reddit fetches all subreddits × sorts in parallel using the public JSON API with per-source URL dedup. Reddit self-posts are processed directly from their content without Tabstack to avoid Reddit bot detection. Product Hunt deduplicates across the 3-day window.
 
 ---
 
@@ -260,8 +266,9 @@ All 8 sources run concurrently during scans with a **10-minute per-source timeou
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  STEP 1: SCAN (10-min per-source timeout)                    │
-│  8 sources (~600 candidates per scan, all concurrent)        │
-│  PH │ HN │ RSS │ 10x Reddit │ BetaList │ FT │ TC │ AITD      │
+│  11 sources (~1300 candidates per scan, all concurrent)      │
+│  PH │ HN │ RSS │ Reddit │ BetaList │ FT │ TC │ AITD │ YC │   │
+│  GitHub │ VentureBeat                                        │
 │                                                              │
 │  Extractor (batched, 10 concurrent):                         │
 │  1. Tabstack /extract/json (structured data + product URL)   │
@@ -280,7 +287,7 @@ All 8 sources run concurrently during scans with a **10-minute per-source timeou
                             ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  STEP 2: ENRICH                                              │
-│  Auto-enriches up to 30 unenriched startup entities          │
+│  Auto-enriches all unenriched startup entities (no cap)      │
 │                                                              │
 │  1. Tabstack /research SSE endpoint                          │
 │  2. GPT extracts: revenue, funding, users, team size,        │
@@ -317,7 +324,7 @@ All 8 sources run concurrently during scans with a **10-minute per-source timeou
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The entire pipeline runs as a single automated flow — triggered by the dashboard "Scan" button or the daily cron job. The frontend shows a 3-step progress tracker (Scanning → Enriching → Generating report) with live status updates.
+The entire pipeline runs as a single **awaited** flow — scan completes fully, then enrichment runs, then report generates. This eliminates race conditions where the pipeline could start before all extractions finish. Triggered by the dashboard "Scan" button or the daily cron job. The frontend shows a 3-step progress tracker (Scanning → Enriching → Generating report) with live status updates driven by in-memory job tracking.
 
 ---
 
@@ -367,8 +374,7 @@ All classified AI startups are enriched via Tabstack's `/research` SSE endpoint 
 2. Corrects generic/wrong entity names using the `betterName()` heuristic
 
 **Enrichment runs:**
-- Automatically after each scan — up to 30 unenriched entities are enriched before report generation
-- During report generation — any remaining unenriched entities in the report set are enriched before the report is built
+- Automatically after each scan — all unenriched startup entities are enriched before report generation (no cap)
 - Manually via `POST /api/admin/enrich?limit=N`
 - Bulk URL + name fix via `POST /api/admin/fix-urls`
 
@@ -552,7 +558,7 @@ The report resolves each entity's website through a priority chain. All candidat
 
 ### Report styling
 
-Reports use the same dark theme as the dashboard (matching CSS variables, colors, and card styles). They are rendered in an in-app modal with an option to open in a new tab.
+Reports use the same dark theme as the dashboard (matching CSS variables, colors, and card styles). They are rendered in an in-app modal.
 
 ---
 
@@ -564,9 +570,9 @@ Reports use the same dark theme as the dashboard (matching CSS variables, colors
 
 A single daily cron runs the entire pipeline. The cron is **pinned to UTC timezone** (via `node-cron`'s `timezone` option) to avoid unexpected triggers when Railway containers use non-UTC locales. The scan discovers new startups, enrichment researches them, and a report is auto-generated with all new findings.
 
-### Scan Rate Limiting
+### Scan Audit Logging
 
-API-triggered scans (`POST /api/admin/scan/run`) have a **15-minute cooldown** — if a scan was triggered within the last 15 minutes, subsequent API calls return `429 Too Many Requests`. The daily cron bypasses this cooldown since it calls `runFullScan()` directly. Every API-triggered scan logs the requester's IP, user-agent, and referer to the `scan_triggers` MongoDB collection for audit purposes.
+Every API-triggered scan logs the requester's IP, user-agent, and referer to the `scan_triggers` MongoDB collection for audit purposes. Scan cooldown is configurable in `src/routes/admin.js` (currently disabled for development).
 
 ---
 
@@ -581,9 +587,9 @@ The app serves an embedded dashboard at `/` — no separate frontend build or de
 - **Scan Pipeline** — one-click "Scan for New Startups" button triggers the full pipeline (scan → enrich → report) with a **3-step progress tracker** showing live status for each stage (e.g. "600 sources crawled · 56 unseen · 10 extracted")
 - **Pipeline Persistence** — refreshing the page mid-scan automatically detects and resumes progress tracking
 - **Smart Entity Names** — frontend `bestName()` picks the best non-generic name across `clean_name`, `matched_name`, and `name`
-- **Startup Reports** — unified dropdown in the navbar listing all reports (latest highlighted); each opens in an in-app dark-themed modal with option to open in a new tab
+- **Startup Reports** — unified dropdown in the navbar listing all reports (latest highlighted); each opens in an in-app dark-themed modal
 - **Stale Run Cleanup** — scan runs stuck for 5+ minutes are auto-marked as failed; per-source 10-minute timeout prevents pipeline stalls
-- **Scan Rate Limiting** — 15-minute cooldown between API-triggered scans; returns 429 if triggered too soon
+- **Scan Audit Logging** — every scan trigger is logged with IP, user-agent, and referer for audit
 - **Tech Stack** — footer showing all technologies used
 - **Responsive** — mobile-friendly with scrollable navbar, horizontal pipeline step cards, and single-column grid
 
