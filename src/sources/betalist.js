@@ -45,7 +45,7 @@ export default {
         meta: {
           tagline: s.tagline,
           topics: s.tags || [],
-          tags: [...(s.tags || []), 'BetaList'],
+          tags: [...(s.tags || []), 'BetaList'].filter(Boolean),
         },
       };
     });

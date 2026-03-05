@@ -10,7 +10,7 @@ const EXTRACT_PROMPT = `You are a startup data extractor. Given research text ab
 {
   "matched_name": "The exact company/product name found in the research",
   "domain_status": "One of: active, parked, for_sale, dead, unknown",
-  "revenue": "Single string with revenue/MRR/ARR figure, e.g. '$50K MRR' or '$1.2M ARR', or null",
+  "revenue": "ACTUAL company revenue/MRR/ARR figure, e.g. '$50K MRR' or '$1.2M ARR', or null. Do NOT include product pricing like '$49/month' or '$99/year' — those are prices, not revenue",
   "funding": "Single string summary, e.g. '$2M seed from Y Combinator' or '$50M Series A', or null",
   "team_size": "Single string, e.g. '12 employees' or 'solo founder', or null",
   "user_count": "Single string, e.g. '10K users' or '500 customers', or null",

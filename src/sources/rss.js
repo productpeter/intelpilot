@@ -91,7 +91,7 @@ export default {
               summary: article.summary,
               author: article.author,
               published_date: article.published_date,
-              tags: article.tags || [],
+              tags: (article.tags || []).filter(Boolean),
             },
           });
         }

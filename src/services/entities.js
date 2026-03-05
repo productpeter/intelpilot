@@ -59,7 +59,7 @@ async function createEntity(candidate, embedding) {
     name: candidate.name,
     canonical_domain: candidate.canonical_domain || null,
     description: candidate.description || '',
-    tags: [...new Set(candidate.tags || [])],
+    tags: [...new Set((candidate.tags || []).filter(Boolean))],
     identifiers: candidate.identifiers || {},
     ...(candidate.website_url && { website_url: candidate.website_url }),
     created_at: now,
@@ -87,7 +87,8 @@ async function mergeEntityFields(entityId, candidate) {
     $set.website_url = candidate.website_url;
   }
 
-  if (candidate.tags?.length) $addToSet.tags = { $each: candidate.tags };
+  const cleanTags = (candidate.tags || []).filter(Boolean);
+  if (cleanTags.length) $addToSet.tags = { $each: cleanTags };
 
   if (candidate.identifiers) {
     for (const [key, val] of Object.entries(candidate.identifiers)) {

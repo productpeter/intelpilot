@@ -83,8 +83,14 @@ function populateCategories(entities) {
   sel.innerHTML = opts.join('');
 }
 
+const PRICING_RE = /^\$\d[\d,.]*\s*\/\s*(?:mo|month|year|yr|user|seat)/i;
+function isPricing(val) {
+  return typeof val === 'string' && PRICING_RE.test(val.trim());
+}
+
 function hasRevenue(e) {
-  return !!(e.enrichment?.metrics?.revenue);
+  const rev = e.enrichment?.metrics?.revenue;
+  return !!(rev && !isPricing(rev));
 }
 
 function hasFunding(e) {
@@ -201,7 +207,8 @@ function renderCard(e) {
   const enriched = !!e.enrichment;
   const verified = e.enrichment?.web_verified;
 
-  const rev = metricStr(metrics.revenue);
+  const rawRev = metricStr(metrics.revenue);
+  const rev = rawRev && !isPricing(rawRev) ? rawRev : null;
   const fund = metricStr(metrics.funding);
   const users = metricStr(metrics.user_count);
   const team = metricStr(metrics.team_size);
@@ -291,8 +298,9 @@ async function openEntityModal(id) {
     const conf = e.classification?.confidence;
 
     let metricsHtml = '';
+    const rawRevModal = metricStr(metrics.revenue);
     const metricFields = [
-      ['Revenue', metricStr(metrics.revenue)],
+      ['Revenue', rawRevModal && !isPricing(rawRevModal) ? rawRevModal : null],
       ['Funding', metricStr(metrics.funding)],
       ['Users', metricStr(metrics.user_count)],
       ['Team Size', metricStr(metrics.team_size)],

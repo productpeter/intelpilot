@@ -74,7 +74,7 @@ export async function generateWeeklyReport() {
       entity_name: entity.name,
       domain: entity.canonical_domain,
       description: entity.description,
-      tags: entity.tags,
+      tags: (entity.tags || []).filter(Boolean),
       category,
       revenue: pick('revenue_claim') || em?.revenue,
       funding: pick('funding_raised') || em?.funding,
