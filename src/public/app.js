@@ -413,9 +413,7 @@ function openReportModal(url) {
   _reportDD.hidden = true;
   const overlay = $('#report-modal-overlay');
   const iframe = $('#report-modal-iframe');
-  const newtab = $('#report-modal-newtab');
   iframe.src = url;
-  newtab.href = url;
   overlay.hidden = false;
 }
 
