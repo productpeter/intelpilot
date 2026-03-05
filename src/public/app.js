@@ -171,6 +171,7 @@ function shortNum(n) {
 
 function metricStr(val) {
   if (!val) return null;
+  if (typeof val === 'string' && (val === 'null' || val === 'N/A' || val === 'n/a' || val === 'unknown' || val === 'none' || val === 'None')) return null;
   if (typeof val === 'number') {
     return shortNum(val);
   }

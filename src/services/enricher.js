@@ -85,10 +85,14 @@ async function enrichSingle(entity) {
     return null;
   }
 
-  for (const key of ['revenue', 'funding', 'team_size', 'user_count', 'growth', 'founded_year', 'notable']) {
+  const NULL_STRINGS = new Set(['null', 'n/a', 'N/A', 'none', 'None', 'unknown', 'Unknown', '']);
+  for (const key of ['revenue', 'funding', 'team_size', 'user_count', 'growth', 'founded_year', 'notable', 'description', 'website']) {
     const v = metrics[key];
     if (v && typeof v === 'object') {
       metrics[key] = v.total ? String(v.total) : JSON.stringify(v);
+    }
+    if (typeof metrics[key] === 'string' && NULL_STRINGS.has(metrics[key].trim())) {
+      metrics[key] = null;
     }
   }
 
