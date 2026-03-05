@@ -125,6 +125,34 @@ router.post('/enrich', async (req, res) => {
   }
 });
 
+router.post('/re-enrich', async (req, res) => {
+  try {
+    const entities = await col('entities')
+      .find({
+        'classification.is_startup': true,
+        enrichment: { $exists: true },
+      })
+      .sort({ updated_at: -1 })
+      .toArray();
+
+    if (!entities.length) {
+      return res.json({ message: 'No enriched entities found', count: 0 });
+    }
+
+    await col('entities').updateMany(
+      { _id: { $in: entities.map((e) => e._id) } },
+      { $unset: { enrichment: '' } },
+    );
+
+    res.json({ message: `Re-enrichment started for ${entities.length} entities`, count: entities.length });
+    enrichEntities(entities).catch((err) =>
+      console.error('[Admin] Re-enrichment error:', err),
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/fix-urls', async (req, res) => {
   try {
     const entities = await col('entities')
