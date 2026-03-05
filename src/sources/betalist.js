@@ -1,6 +1,10 @@
 import { extractJson } from '../lib/tabstack.js';
 
-const BETALIST_URL = 'https://betalist.com/startups';
+const BETALIST_URLS = [
+  'https://betalist.com/startups',
+  'https://betalist.com/markets/artificial-intelligence',
+  'https://betalist.com/markets/saas',
+];
 
 const SCHEMA = {
   type: 'object',
@@ -31,23 +35,35 @@ export default {
   type: 'html',
 
   async fetchCandidates() {
-    const result = await extractJson(BETALIST_URL, SCHEMA, { nocache: true });
-    const startups = result.startups || [];
+    const seen = new Set();
+    const candidates = [];
 
-    return startups.map((s) => {
-      let url = s.url || '';
-      if (url && !url.startsWith('http')) {
-        url = `https://betalist.com${url.startsWith('/') ? '' : '/'}${url}`;
+    for (const pageUrl of BETALIST_URLS) {
+      try {
+        const result = await extractJson(pageUrl, SCHEMA, { nocache: true });
+        for (const s of result.startups || []) {
+          let url = s.url || '';
+          if (url && !url.startsWith('http')) {
+            url = `https://betalist.com${url.startsWith('/') ? '' : '/'}${url}`;
+          }
+          const finalUrl = url || 'https://betalist.com/startups';
+          if (seen.has(finalUrl)) continue;
+          seen.add(finalUrl);
+          candidates.push({
+            url: finalUrl,
+            title: s.name,
+            meta: {
+              tagline: s.tagline,
+              topics: s.tags || [],
+              tags: [...(s.tags || []), 'BetaList'].filter(Boolean),
+            },
+          });
+        }
+      } catch (err) {
+        console.warn(`[BetaList] Failed to fetch ${pageUrl}: ${err.message}`);
       }
-      return {
-        url: url || `https://betalist.com/startups`,
-        title: s.name,
-        meta: {
-          tagline: s.tagline,
-          topics: s.tags || [],
-          tags: [...(s.tags || []), 'BetaList'].filter(Boolean),
-        },
-      };
-    });
+    }
+
+    return candidates;
   },
 };

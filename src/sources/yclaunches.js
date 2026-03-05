@@ -3,6 +3,8 @@ import { extractJson } from '../lib/tabstack.js';
 const PAGES = [
   'https://www.ycombinator.com/launches',
   'https://www.ycombinator.com/companies?batch=W25&status=Active',
+  'https://www.ycombinator.com/companies?batch=S24&status=Active',
+  'https://www.ycombinator.com/companies?batch=W24&status=Active',
 ];
 
 const SCHEMA = {

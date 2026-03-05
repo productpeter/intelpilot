@@ -1,19 +1,19 @@
 import axios from 'axios';
 
 const SUBREDDITS = [
-  { sub: 'SaaS', limit: 50 },
-  { sub: 'startups', limit: 50 },
-  { sub: 'indiehackers', limit: 50 },
-  { sub: 'artificial', limit: 40 },
-  { sub: 'LocalLLaMA', limit: 40 },
-  { sub: 'machinelearning', limit: 30 },
-  { sub: 'ChatGPT', limit: 30 },
-  { sub: 'singularity', limit: 20 },
-  { sub: 'OpenAI', limit: 20 },
-  { sub: 'AItools', limit: 30 },
-  { sub: 'Entrepreneur', limit: 40 },
-  { sub: 'microsaas', limit: 30 },
-  { sub: 'selfhosted', limit: 30 },
+  { sub: 'SaaS', limit: 250 },
+  { sub: 'startups', limit: 250 },
+  { sub: 'indiehackers', limit: 250 },
+  { sub: 'artificial', limit: 200 },
+  { sub: 'LocalLLaMA', limit: 200 },
+  { sub: 'machinelearning', limit: 150 },
+  { sub: 'ChatGPT', limit: 150 },
+  { sub: 'singularity', limit: 100 },
+  { sub: 'OpenAI', limit: 100 },
+  { sub: 'AItools', limit: 150 },
+  { sub: 'Entrepreneur', limit: 200 },
+  { sub: 'microsaas', limit: 150 },
+  { sub: 'selfhosted', limit: 150 },
 ];
 
 const SORTS = ['hot', 'new'];

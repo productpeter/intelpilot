@@ -1,6 +1,6 @@
 import { extractJson } from '../lib/tabstack.js';
 
-const DAYS_BACK = 3;
+const DAYS_BACK = 15;
 
 function getPHUrls() {
   const urls = [];

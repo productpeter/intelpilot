@@ -3,11 +3,16 @@ import { extractJson } from '../lib/tabstack.js';
 const PAGES = [
   { url: 'https://www.toolify.ai/newly-launched', label: 'Toolify New' },
   { url: 'https://www.toolify.ai/best-ai-tools', label: 'Toolify Trending' },
+  { url: 'https://www.toolify.ai/best-ai-tools?page=2', label: 'Toolify Trending p2' },
   { url: 'https://aitools.fyi/new', label: 'AITools.fyi New' },
   { url: 'https://aitools.fyi/trending', label: 'AITools.fyi Trending' },
+  { url: 'https://aitools.fyi/popular', label: 'AITools.fyi Popular' },
   { url: 'https://www.topai.tools/new', label: 'TopAI.tools New' },
+  { url: 'https://www.topai.tools/trending', label: 'TopAI.tools Trending' },
   { url: 'https://uneed.best/new', label: 'Uneed New' },
+  { url: 'https://uneed.best/trending', label: 'Uneed Trending' },
   { url: 'https://www.saashub.com/new', label: 'SaaSHub New' },
+  { url: 'https://www.saashub.com/trending', label: 'SaaSHub Trending' },
 ];
 
 const SCHEMA = {

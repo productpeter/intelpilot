@@ -5,6 +5,9 @@ const PAGES = [
   'https://techcrunch.com/tag/generative-ai/',
   'https://techcrunch.com/category/startups/',
   'https://techcrunch.com/category/venture/',
+  'https://techcrunch.com/category/apps/',
+  'https://techcrunch.com/tag/saas/',
+  'https://techcrunch.com/tag/funding/',
 ];
 
 const SCHEMA = {

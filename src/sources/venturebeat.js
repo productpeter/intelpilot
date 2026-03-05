@@ -3,6 +3,8 @@ import { extractJson } from '../lib/tabstack.js';
 const PAGES = [
   'https://venturebeat.com/category/ai/',
   'https://venturebeat.com/category/enterprise-analytics/',
+  'https://venturebeat.com/category/data-infrastructure/',
+  'https://venturebeat.com/category/security/',
 ];
 
 const SCHEMA = {

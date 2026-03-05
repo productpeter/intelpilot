@@ -3,6 +3,8 @@ import { extractJson } from '../lib/tabstack.js';
 const PAGES = [
   'https://www.futuretools.io/recently-added',
   'https://www.futuretools.io/',
+  'https://www.futuretools.io/ai-tools?pricing-model=free&sort=most-popular',
+  'https://www.futuretools.io/ai-tools?sort=most-popular',
 ];
 
 const SCHEMA = {

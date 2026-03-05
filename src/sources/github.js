@@ -3,6 +3,9 @@ import { extractJson } from '../lib/tabstack.js';
 const PAGES = [
   { url: 'https://github.com/trending?since=daily', label: 'GitHub Trending Daily' },
   { url: 'https://github.com/trending?since=weekly&spoken_language_code=en', label: 'GitHub Trending Weekly' },
+  { url: 'https://github.com/trending?since=monthly', label: 'GitHub Trending Monthly' },
+  { url: 'https://github.com/trending/python?since=daily', label: 'GitHub Trending Python' },
+  { url: 'https://github.com/trending/typescript?since=daily', label: 'GitHub Trending TypeScript' },
 ];
 
 const SCHEMA = {

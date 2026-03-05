@@ -39,6 +39,16 @@ const FEEDS = [
     label: 'TLDR AI Newsletter',
   },
   {
+    name: 'tldr_founders',
+    url: 'https://tldr.tech/founders',
+    label: 'TLDR Founders Newsletter',
+  },
+  {
+    name: 'tldr_webdev',
+    url: 'https://tldr.tech/webdev',
+    label: 'TLDR Web Dev Newsletter',
+  },
+  {
     name: 'hn_newest',
     url: 'https://news.ycombinator.com/newest',
     label: 'Hacker News New',
@@ -67,6 +77,16 @@ const FEEDS = [
     name: 'hn_top',
     url: 'https://news.ycombinator.com/',
     label: 'Hacker News Front Page',
+  },
+  {
+    name: 'hn_best',
+    url: 'https://news.ycombinator.com/best',
+    label: 'Hacker News Best',
+  },
+  {
+    name: 'ben_tossell',
+    url: 'https://www.bensbites.com/',
+    label: "Ben's Bites AI Newsletter",
   },
 ];
 
