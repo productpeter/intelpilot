@@ -13,13 +13,7 @@ const router = Router();
 router.get('/scan/status', async (req, res) => {
   const staleThreshold = new Date(Date.now() - 5 * 60 * 1000);
   await col('scan_runs').updateMany(
-    {
-      status: 'running',
-      $or: [
-        { started_at: { $lt: staleThreshold } },
-        { started_at: { $lt: staleThreshold.toISOString() } },
-      ],
-    },
+    { status: 'running', started_at: { $lt: staleThreshold } },
     { $set: { status: 'fail', finished_at: new Date() } },
   );
 

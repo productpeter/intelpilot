@@ -58,16 +58,11 @@ router.get('/:id', async (req, res) => {
   );
   if (!entity) return res.status(404).json({ error: 'Entity not found' });
 
-  const [signals, directEvidence, discoveries] = await Promise.all([
+  const [signals, discoveries] = await Promise.all([
     col('signals')
       .find({ entity_id: entityId })
       .sort({ captured_at: -1 })
       .limit(50)
-      .toArray(),
-    col('evidence')
-      .find({ entity_id: entityId })
-      .sort({ captured_at: -1 })
-      .limit(20)
       .toArray(),
     col('discoveries')
       .find({ entity_id: entityId })
@@ -77,15 +72,9 @@ router.get('/:id', async (req, res) => {
   ]);
 
   const signalEvidenceIds = [...new Set(signals.map((s) => s.evidence_id).filter(Boolean))];
-  const signalEvidence = signalEvidenceIds.length
+  const evidence = signalEvidenceIds.length
     ? await col('evidence').find({ _id: { $in: signalEvidenceIds } }).toArray()
     : [];
-
-  const evidenceMap = new Map();
-  for (const e of [...directEvidence, ...signalEvidence]) {
-    evidenceMap.set(e._id.toString(), e);
-  }
-  const evidence = [...evidenceMap.values()];
 
   res.json({ ...entity, signals, evidence, discoveries });
 });
