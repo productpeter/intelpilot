@@ -306,12 +306,12 @@ async function openEntityModal(id) {
     let metricsHtml = '';
     const rawRevModal = metricStr(metrics.revenue);
     const metricFields = [
-      ['Revenue', rawRevModal && !isPricing(rawRevModal) ? rawRevModal : null],
-      ['Funding', metricStr(metrics.funding)],
-      ['Users', metricStr(metrics.user_count)],
-      ['Team Size', metricStr(metrics.team_size)],
-      ['Growth', metricStr(metrics.growth)],
-      ['Founded', metricStr(metrics.founded_year)],
+      ['Revenue', rawRevModal && !isPricing(rawRevModal) ? rawRevModal : null, metrics.revenue_source],
+      ['Funding', metricStr(metrics.funding), metrics.funding_source],
+      ['Users', metricStr(metrics.user_count), metrics.user_count_source],
+      ['Team Size', metricStr(metrics.team_size), metrics.team_size_source],
+      ['Growth', metricStr(metrics.growth), metrics.growth_source],
+      ['Founded', metricStr(metrics.founded_year), null],
     ];
     const filled = metricFields.filter(([, v]) => v);
     if (filled.length) {
@@ -319,7 +319,10 @@ async function openEntityModal(id) {
         <div class="modal-section">
           <h3>Metrics</h3>
           <div class="metrics-grid">
-            ${filled.map(([l, v]) => `<div class="metric-card"><div class="label">${l}</div><div class="value">${escHtml(v)}</div></div>`).join('')}
+            ${filled.map(([l, v, src]) => {
+              const srcLink = src ? `<a href="${escAttr(src)}" target="_blank" rel="noopener" class="evidence-link" title="View source">↗</a>` : '';
+              return `<div class="metric-card"><div class="label">${l}${srcLink}</div><div class="value">${escHtml(v)}</div></div>`;
+            }).join('')}
           </div>
         </div>
       `;
@@ -327,9 +330,10 @@ async function openEntityModal(id) {
 
     let notableHtml = '';
     if (metrics.notable) {
+      const notableSrc = metrics.notable_source ? `<a href="${escAttr(metrics.notable_source)}" target="_blank" rel="noopener" class="evidence-link" title="View source">↗</a>` : '';
       notableHtml = `
         <div class="modal-section">
-          <h3>Notable</h3>
+          <h3>Notable ${notableSrc}</h3>
           <p style="font-size:0.85rem;color:var(--text-dim);">${escHtml(metrics.notable)}</p>
         </div>
       `;
@@ -359,13 +363,22 @@ async function openEntityModal(id) {
       `;
     }
 
+    const evidenceMap = {};
+    for (const ev of evidence) {
+      evidenceMap[String(ev._id)] = ev;
+    }
+
     let signalsHtml = '';
     if (signals.length) {
       signalsHtml = `
         <div class="modal-section">
           <h3>Signals (${signals.length})</h3>
           <ul class="signal-list">
-            ${signals.slice(0, 25).map((s) => `<li><span class="signal-type">${escHtml(s.signal_type)}${s.enriched ? ' ✦' : ''}</span><span class="signal-value">${escHtml(s.value_text || '')}</span></li>`).join('')}
+            ${signals.slice(0, 25).map((s) => {
+              const ev = s.evidence_id ? evidenceMap[String(s.evidence_id)] : null;
+              const srcLink = ev?.url ? ` <a href="${escAttr(ev.url)}" target="_blank" rel="noopener" class="evidence-link" title="View source">↗</a>` : '';
+              return `<li><span class="signal-type">${escHtml(s.signal_type)}${s.enriched ? ' ✦' : ''}${srcLink}</span><span class="signal-value">${escHtml(s.value_text || '')}</span></li>`;
+            }).join('')}
           </ul>
         </div>
       `;
@@ -389,6 +402,25 @@ async function openEntityModal(id) {
       `;
     }
 
+    const recentNews = e.enrichment?.recent_news || [];
+    let newsHtml = '';
+    if (recentNews.length) {
+      newsHtml = `
+        <div class="modal-section">
+          <h3>Recent News (${recentNews.length})</h3>
+          <ul class="news-list">
+            ${recentNews.map((n) => `
+              <li>
+                <a href="${escAttr(n.url)}" target="_blank" rel="noopener">${escHtml(n.title)}</a>
+                ${n.date ? `<span class="news-date">${escHtml(n.date)}</span>` : ''}
+                ${n.summary ? `<p class="news-summary">${escHtml(n.summary)}</p>` : ''}
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
     const enrichedAt = e.enrichment?.enriched_at;
     const verified = e.enrichment?.web_verified;
 
@@ -404,6 +436,7 @@ async function openEntityModal(id) {
       ${url ? `<a href="${escAttr(url)}" target="_blank" rel="noopener" class="modal-url">${escHtml(url)}</a>` : ''}
       ${metricsHtml}
       ${notableHtml}
+      ${newsHtml}
       ${discoveriesHtml}
       ${signalsHtml}
       ${evidenceHtml}

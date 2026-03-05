@@ -819,6 +819,22 @@ body {
   letter-spacing: 0.04em;
   color: var(--text-muted);
   margin-bottom: 0.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.evidence-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.72rem;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.evidence-link:hover {
+  opacity: 1;
+  text-decoration: none;
 }
 
 .metric-card .value {
@@ -882,6 +898,38 @@ body {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* News list */
+.news-list {
+  list-style: none;
+}
+
+.news-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.news-list a {
+  font-size: 0.82rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.news-list a:hover { text-decoration: underline; }
+
+.news-date {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: 0.5rem;
+}
+
+.news-summary {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 0.2rem;
+  line-height: 1.35;
 }
 
 /* Discovery list */

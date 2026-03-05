@@ -5,24 +5,42 @@ import { isValidProductUrl } from './extractor.js';
 import { startJob, updateJob, finishJob, failJob } from './progress.js';
 import { betterName } from '../lib/namefix.js';
 
-const EXTRACT_PROMPT = `You are a startup data extractor. Given research text about a startup/company, extract structured metrics. Respond with JSON:
+const EXTRACT_PROMPT = `You are a startup data extractor. Given research text about a startup/company, extract structured metrics, source URLs, and recent news. Respond with JSON:
 
 {
   "matched_name": "The exact company/product name found in the research",
   "domain_status": "One of: active, parked, for_sale, dead, unknown",
   "revenue": "ACTUAL company revenue/MRR/ARR figure, e.g. '$50K MRR' or '$1.2M ARR', or null. Do NOT include product pricing like '$49/month' or '$99/year' — those are prices, not revenue",
+  "revenue_source": "URL where the revenue data was found, or null",
   "funding": "Single string summary, e.g. '$2M seed from Y Combinator' or '$50M Series A', or null",
+  "funding_source": "URL where the funding data was found, or null",
   "team_size": "Single string, e.g. '12 employees' or 'solo founder', or null",
+  "team_size_source": "URL where team size data was found, or null",
   "user_count": "Single string, e.g. '10K users' or '500 customers', or null",
+  "user_count_source": "URL where user/customer count data was found, or null",
   "growth": "Single string, e.g. '30% MoM growth' or 'doubled in 3 months', or null",
+  "growth_source": "URL where growth data was found, or null",
   "founded_year": "Year as a string, e.g. '2024', or null",
   "description": "A concise 1-2 sentence description of what the company does",
   "website": "Primary website URL if found, or null",
-  "notable": "Any notable facts (e.g. YC batch, notable customers, awards)"
+  "notable": "Any notable facts (e.g. YC batch, notable customers, awards)",
+  "notable_source": "URL where the notable fact was found, or null",
+  "recent_news": [
+    {
+      "title": "Article headline",
+      "url": "Full URL to the article",
+      "date": "Publication date if available, e.g. '2025-01-15' or 'Jan 2025', or null",
+      "summary": "One-sentence summary of the article"
+    }
+  ]
 }
 
-IMPORTANT: Every field must be either null or a plain string. NEVER return objects or arrays for any field. Summarize complex data into a single readable string.
-Only include data explicitly stated in the research. Do not guess or fabricate numbers.`;
+IMPORTANT:
+- Every field except "recent_news" must be either null or a plain string. NEVER return objects or arrays for those fields.
+- "recent_news" is an array of objects (up to 5 most recent). Return an empty array [] if no news articles are found.
+- Only include data explicitly stated in the research. Do not guess or fabricate numbers.
+- For _source fields: provide the specific URL from the research text where the data was cited. If no URL is available for a metric, use null.
+- For recent_news: only include real articles with actual URLs from the research text. Do not invent articles.`;
 
 const ENRICHMENT_CONCURRENCY = 3;
 
@@ -86,7 +104,8 @@ async function enrichSingle(entity) {
   }
 
   const NULL_STRINGS = new Set(['null', 'n/a', 'N/A', 'none', 'None', 'unknown', 'Unknown', '']);
-  for (const key of ['revenue', 'funding', 'team_size', 'user_count', 'growth', 'founded_year', 'notable', 'description', 'website']) {
+  const allMetricKeys = ['revenue', 'revenue_source', 'funding', 'funding_source', 'team_size', 'team_size_source', 'user_count', 'user_count_source', 'growth', 'growth_source', 'founded_year', 'notable', 'notable_source', 'description', 'website'];
+  for (const key of allMetricKeys) {
     const v = metrics[key];
     if (v && typeof v === 'object') {
       metrics[key] = v.total ? String(v.total) : JSON.stringify(v);
@@ -95,6 +114,19 @@ async function enrichSingle(entity) {
       metrics[key] = null;
     }
   }
+
+  const recentNews = Array.isArray(metrics.recent_news)
+    ? metrics.recent_news
+        .filter((n) => n && typeof n === 'object' && n.title && n.url && typeof n.url === 'string' && n.url.startsWith('http'))
+        .slice(0, 5)
+        .map((n) => ({
+          title: String(n.title || '').slice(0, 200),
+          url: String(n.url),
+          date: n.date || null,
+          summary: n.summary ? String(n.summary).slice(0, 300) : null,
+        }))
+    : [];
+  delete metrics.recent_news;
 
   const matchedName = (metrics.matched_name || '').toLowerCase().trim();
   const entityNameLower = name.toLowerCase().trim();
@@ -110,6 +142,7 @@ async function enrichSingle(entity) {
   const enrichment = {
     research_text: researchText.slice(0, 2000),
     metrics,
+    recent_news: recentNews,
     name_matched: nameMatches,
     enriched_at: new Date(),
   };
@@ -120,15 +153,30 @@ async function enrichSingle(entity) {
   );
 
   const signalMap = {
-    revenue: 'revenue_claim',
-    funding: 'funding_raised',
-    user_count: 'user_count',
-    team_size: 'team_size',
-    growth: 'growth_rate',
+    revenue: { type: 'revenue_claim', sourceKey: 'revenue_source' },
+    funding: { type: 'funding_raised', sourceKey: 'funding_source' },
+    user_count: { type: 'user_count', sourceKey: 'user_count_source' },
+    team_size: { type: 'team_size', sourceKey: 'team_size_source' },
+    growth: { type: 'growth_rate', sourceKey: 'growth_source' },
   };
 
-  for (const [field, signalType] of Object.entries(signalMap)) {
+  for (const [field, { type: signalType, sourceKey }] of Object.entries(signalMap)) {
     if (nameMatches && metrics[field] && typeof metrics[field] === 'string') {
+      const sourceUrl = metrics[sourceKey] || null;
+
+      let evidenceId = null;
+      if (sourceUrl && typeof sourceUrl === 'string' && sourceUrl.startsWith('http')) {
+        const evidenceDoc = {
+          url: sourceUrl,
+          type: signalType,
+          snippet: metrics[field],
+          entity_id: entity._id,
+          created_at: new Date(),
+        };
+        const inserted = await col('evidence').insertOne(evidenceDoc);
+        evidenceId = inserted.insertedId;
+      }
+
       const existing = await col('signals').findOne({
         entity_id: entity._id,
         signal_type: signalType,
@@ -142,13 +190,28 @@ async function enrichSingle(entity) {
           unit: null,
           confidence: 0.85,
           entity_id: entity._id,
-          evidence_id: null,
+          evidence_id: evidenceId,
           source_id: null,
           captured_at: new Date(),
           enriched: true,
         });
+      } else if (evidenceId && !existing.evidence_id) {
+        await col('signals').updateOne(
+          { _id: existing._id },
+          { $set: { evidence_id: evidenceId } },
+        );
       }
     }
+  }
+
+  if (metrics.notable && metrics.notable_source && typeof metrics.notable_source === 'string' && metrics.notable_source.startsWith('http')) {
+    await col('evidence').insertOne({
+      url: metrics.notable_source,
+      type: 'notable',
+      snippet: metrics.notable,
+      entity_id: entity._id,
+      created_at: new Date(),
+    });
   }
 
   let enrichedWebsite = metrics.website || null;
@@ -225,5 +288,5 @@ function levenshteinRatio(a, b) {
 function buildResearchQuery(name, domain, description) {
   const domainHint = domain && !domain.startsWith('reddit-') ? ` (${domain})` : '';
   const descHint = description ? ` — ${description}` : '';
-  return `Find the official website and company information for the AI startup "${name}"${domainHint}${descHint}. What is their website URL? Also find their current revenue or MRR, total funding raised, team size, user or customer count, growth metrics, and founding date. Include specific numbers and the official website URL.`;
+  return `Find the official website and company information for the AI startup "${name}"${domainHint}${descHint}. What is their website URL? Also find their current revenue or MRR, total funding raised, team size, user or customer count, growth metrics, and founding date. Include specific numbers and the official website URL. For every metric you find (revenue, funding, users, team size, growth), include the source URL where that information was published. Also find the most recent news articles, blog posts, or press coverage about this company — include the article title, URL, date, and a brief summary for each.`;
 }
