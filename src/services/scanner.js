@@ -7,7 +7,7 @@ import { betterName } from '../lib/namefix.js';
 import { startJob, updateJob, finishJob } from './progress.js';
 
 const EXTRACTION_CONCURRENCY = 10;
-const SOURCE_TIMEOUT_MS = 10 * 60 * 1000;
+const SOURCE_TIMEOUT_MS = 20 * 60 * 1000;
 
 function withTimeout(promise, ms, label) {
   return Promise.race([
