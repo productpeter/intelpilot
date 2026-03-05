@@ -54,6 +54,16 @@ const FEEDS = [
     label: "There's An AI For That - Most Saved",
   },
   {
+    name: 'theresanaiforthat_trending',
+    url: 'https://theresanaiforthat.com/trending/',
+    label: "There's An AI For That - Trending",
+  },
+  {
+    name: 'theresanaiforthat_featured',
+    url: 'https://theresanaiforthat.com/',
+    label: "There's An AI For That - Featured",
+  },
+  {
     name: 'hn_top',
     url: 'https://news.ycombinator.com/',
     label: 'Hacker News Front Page',
