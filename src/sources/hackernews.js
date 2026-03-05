@@ -12,7 +12,7 @@ export default {
       timeout: 15_000,
     });
 
-    const top = ids.slice(0, 40);
+    const top = ids.slice(0, 100);
     const candidates = [];
 
     for (const id of top) {

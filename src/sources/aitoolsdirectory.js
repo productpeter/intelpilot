@@ -2,7 +2,9 @@ import { extractJson } from '../lib/tabstack.js';
 
 const PAGES = [
   { url: 'https://www.toolify.ai/newly-launched', label: 'Toolify New' },
+  { url: 'https://www.toolify.ai/best-ai-tools', label: 'Toolify Trending' },
   { url: 'https://aitools.fyi/new', label: 'AITools.fyi New' },
+  { url: 'https://aitools.fyi/trending', label: 'AITools.fyi Trending' },
 ];
 
 const SCHEMA = {

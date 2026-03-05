@@ -1,10 +1,15 @@
 import { extractJson } from '../lib/tabstack.js';
 
-function getPHUrl() {
-  const d = new Date();
-  return `https://www.producthunt.com/leaderboard/daily/${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-}
+const DAYS_BACK = 3;
 
+function getPHUrls() {
+  const urls = [];
+  for (let i = 0; i < DAYS_BACK; i++) {
+    const d = new Date(Date.now() - i * 86_400_000);
+    urls.push(`https://www.producthunt.com/leaderboard/daily/${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`);
+  }
+  return urls;
+}
 
 const SCHEMA = {
   type: 'object',
@@ -36,33 +41,50 @@ const SCHEMA = {
   required: ['products'],
 };
 
+function toCandidate(p) {
+  let url = p.website || p.url || '';
+  if (url && !url.startsWith('http')) {
+    url = `https://www.producthunt.com${url.startsWith('/') ? '' : '/'}${url}`;
+  }
+  if (!url) {
+    url = `https://www.producthunt.com/posts/${p.name.toLowerCase().replace(/\s+/g, '-')}`;
+  }
+  return {
+    url,
+    title: p.name,
+    meta: {
+      tagline: p.tagline,
+      upvotes: p.upvotes,
+      website: p.website,
+      topics: p.topics || [],
+      maker: p.maker,
+    },
+  };
+}
+
 export default {
   name: 'producthunt',
   type: 'html',
 
   async fetchCandidates() {
-    const result = await extractJson(getPHUrl(), SCHEMA, { nocache: true });
-    const products = result.products || [];
+    const seen = new Set();
+    const candidates = [];
 
-    return products.map((p) => {
-      let url = p.website || p.url || '';
-      if (url && !url.startsWith('http')) {
-        url = `https://www.producthunt.com${url.startsWith('/') ? '' : '/'}${url}`;
+    for (const pageUrl of getPHUrls()) {
+      try {
+        const result = await extractJson(pageUrl, SCHEMA, { nocache: true });
+        for (const p of result.products || []) {
+          const c = toCandidate(p);
+          if (seen.has(c.url)) continue;
+          seen.add(c.url);
+          candidates.push(c);
+        }
+      } catch (err) {
+        console.error(`[ProductHunt] Failed to fetch ${pageUrl}:`, err.message);
       }
-      if (!url) {
-        url = `https://www.producthunt.com/posts/${p.name.toLowerCase().replace(/\s+/g, '-')}`;
-      }
-      return {
-        url,
-        title: p.name,
-        meta: {
-          tagline: p.tagline,
-          upvotes: p.upvotes,
-          website: p.website,
-          topics: p.topics || [],
-          maker: p.maker,
-        },
-      };
-    });
+    }
+
+    console.log(`[ProductHunt] Fetched ${candidates.length} unique candidates from ${DAYS_BACK} days`);
+    return candidates;
   },
 };

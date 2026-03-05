@@ -44,9 +44,14 @@ const FEEDS = [
     label: 'Hacker News New',
   },
   {
-    name: 'theresanaiforthat',
+    name: 'theresanaiforthat_new',
     url: 'https://theresanaiforthat.com/new/',
     label: "There's An AI For That - New",
+  },
+  {
+    name: 'theresanaiforthat_saved',
+    url: 'https://theresanaiforthat.com/most-saved/',
+    label: "There's An AI For That - Most Saved",
   },
   {
     name: 'hn_top',

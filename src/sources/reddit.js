@@ -11,12 +11,16 @@ const SUBREDDITS = [
   { sub: 'singularity', limit: 20 },
   { sub: 'OpenAI', limit: 20 },
   { sub: 'AItools', limit: 30 },
+  { sub: 'Entrepreneur', limit: 40 },
+  { sub: 'microsaas', limit: 30 },
+  { sub: 'selfhosted', limit: 30 },
 ];
 
+const SORTS = ['hot', 'new'];
 const UA = { 'User-Agent': 'IntelPilot/1.0' };
 
-async function fetchSubreddit(sub, limit) {
-  const url = `https://www.reddit.com/r/${sub}/hot.json?limit=${limit}`;
+async function fetchSubreddit(sub, limit, sort = 'hot') {
+  const url = `https://www.reddit.com/r/${sub}/${sort}.json?limit=${limit}`;
   const { data } = await axios.get(url, { headers: UA, timeout: 15_000 });
   const posts = data?.data?.children || [];
 
@@ -33,6 +37,7 @@ async function fetchSubreddit(sub, limit) {
         meta: {
           reddit_url: redditUrl,
           subreddit: sub,
+          sort,
           author: d.author,
           upvotes: d.ups,
           comments_count: d.num_comments,
@@ -49,16 +54,23 @@ export default {
   type: 'html',
 
   async fetchCandidates() {
-    const results = await Promise.allSettled(
-      SUBREDDITS.map((s) => fetchSubreddit(s.sub, s.limit)),
+    const fetches = SUBREDDITS.flatMap((s) =>
+      SORTS.map((sort) => fetchSubreddit(s.sub, s.limit, sort)),
     );
+    const results = await Promise.allSettled(fetches);
 
+    const seen = new Set();
     const candidates = [];
     for (const r of results) {
-      if (r.status === 'fulfilled') candidates.push(...r.value);
+      if (r.status !== 'fulfilled') continue;
+      for (const c of r.value) {
+        if (seen.has(c.url)) continue;
+        seen.add(c.url);
+        candidates.push(c);
+      }
     }
 
-    console.log(`[Reddit] Fetched ${candidates.length} candidates from ${SUBREDDITS.length} subreddits`);
+    console.log(`[Reddit] Fetched ${candidates.length} unique candidates from ${SUBREDDITS.length} subs × ${SORTS.length} sorts`);
     return candidates;
   },
 };
