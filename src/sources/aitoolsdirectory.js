@@ -5,6 +5,9 @@ const PAGES = [
   { url: 'https://www.toolify.ai/best-ai-tools', label: 'Toolify Trending' },
   { url: 'https://aitools.fyi/new', label: 'AITools.fyi New' },
   { url: 'https://aitools.fyi/trending', label: 'AITools.fyi Trending' },
+  { url: 'https://www.topai.tools/new', label: 'TopAI.tools New' },
+  { url: 'https://uneed.best/new', label: 'Uneed New' },
+  { url: 'https://www.saashub.com/new', label: 'SaaSHub New' },
 ];
 
 const SCHEMA = {

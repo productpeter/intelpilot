@@ -6,6 +6,9 @@ import betalist from './betalist.js';
 import futuretools from './futuretools.js';
 import techcrunch from './techcrunch.js';
 import aitoolsdirectory from './aitoolsdirectory.js';
+import yclaunches from './yclaunches.js';
+import github from './github.js';
+import venturebeat from './venturebeat.js';
 
 const sources = [
   producthunt,
@@ -16,6 +19,9 @@ const sources = [
   futuretools,
   techcrunch,
   aitoolsdirectory,
+  yclaunches,
+  github,
+  venturebeat,
 ];
 
 export function getAllSources() {

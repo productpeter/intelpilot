@@ -1,10 +1,8 @@
 import { extractJson } from '../lib/tabstack.js';
 
 const PAGES = [
-  'https://techcrunch.com/category/artificial-intelligence/',
-  'https://techcrunch.com/tag/generative-ai/',
-  'https://techcrunch.com/category/startups/',
-  'https://techcrunch.com/category/venture/',
+  'https://venturebeat.com/category/ai/',
+  'https://venturebeat.com/category/enterprise-analytics/',
 ];
 
 const SCHEMA = {
@@ -17,10 +15,13 @@ const SCHEMA = {
         properties: {
           title: { type: 'string', description: 'Article headline' },
           url: { type: 'string', description: 'Article URL' },
-          summary: { type: ['string', 'null'], description: 'Article excerpt or summary' },
+          summary: { type: ['string', 'null'], description: 'Article excerpt' },
           author: { type: ['string', 'null'], description: 'Author name' },
           date: { type: ['string', 'null'], description: 'Publication date' },
-          startup_mentioned: { type: ['string', 'null'], description: 'Name of the startup or company primarily featured in the article, if any' },
+          startup_mentioned: {
+            type: ['string', 'null'],
+            description: 'Name of the startup or company primarily featured in the article, if any',
+          },
         },
         required: ['title', 'url'],
       },
@@ -30,7 +31,7 @@ const SCHEMA = {
 };
 
 export default {
-  name: 'techcrunch_ai',
+  name: 'venturebeat',
   type: 'html',
 
   async fetchCandidates() {
@@ -48,16 +49,16 @@ export default {
               author: article.author,
               published_date: article.date,
               startup_mentioned: article.startup_mentioned,
-              tags: ['TechCrunch', 'AI'],
+              tags: ['VentureBeat', 'AI'],
             },
           });
         }
       } catch (err) {
-        console.error(`[TechCrunch] Failed to fetch ${pageUrl}:`, err.message);
+        console.error(`[VentureBeat] Failed to fetch ${pageUrl}:`, err.message);
       }
     }
 
-    console.log(`[TechCrunch] Fetched ${candidates.length} candidates`);
+    console.log(`[VentureBeat] Fetched ${candidates.length} candidates`);
     return candidates;
   },
 };
