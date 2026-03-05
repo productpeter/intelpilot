@@ -4,9 +4,15 @@ const SUBREDDITS = [
   { sub: 'SaaS', limit: 25 },
   { sub: 'startups', limit: 25 },
   { sub: 'indiehackers', limit: 25 },
-  { sub: 'AItools', limit: 25 },
+  { sub: 'artificial', limit: 25 },
   { sub: 'microsaas', limit: 25 },
   { sub: 'Entrepreneur', limit: 25 },
+  { sub: 'LocalLLaMA', limit: 25 },
+  { sub: 'machinelearning', limit: 25 },
+  { sub: 'ChatGPT', limit: 25 },
+  { sub: 'singularity', limit: 25 },
+  { sub: 'OpenAI', limit: 25 },
+  { sub: 'selfhosted', limit: 25 },
 ];
 const UA = { 'User-Agent': 'node:intelpilot:v1.0 (startup discovery research tool)' };
 
