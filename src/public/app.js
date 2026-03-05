@@ -685,20 +685,25 @@ function stopEnrichPolling() {
 }
 
 $('#btn-enrich').addEventListener('click', async () => {
-  if (!confirm('Re-enrich all existing startup entities? This will update evidence links and news for every entity.')) return;
+  if (!confirm('Re-enrich all startup entities? This will update evidence links and news for every entity.')) return;
   $('#btn-enrich').disabled = true;
-  setFeedback('Starting re-enrichment…', 'loading');
+  setFeedback('Starting enrichment…', 'loading');
   showEnrichProgress();
   updateEnrichBar(0, 0, 0);
   try {
     const res = await api('POST', '/admin/re-enrich');
-    if (res.count === 0) {
-      const enrichRes = await api('POST', '/admin/enrich?limit=5000');
-      setFeedback(`Enriching ${enrichRes.count} entities…`, 'loading');
+    const msg = res.count > 0 ? `Re-enriching ${res.count} entities` : '';
+    const enrichRes = await api('POST', '/admin/enrich?limit=5000');
+    const msg2 = enrichRes.count > 0 ? `${enrichRes.count} new to enrich` : '';
+    const total = (res.count || 0) + (enrichRes.count || 0);
+    setFeedback([msg, msg2].filter(Boolean).join(' + ') || 'Nothing to enrich', 'loading');
+    if (total > 0) {
+      startEnrichPolling();
     } else {
-      setFeedback(`Re-enriching ${res.count} entities…`, 'loading');
+      $('#btn-enrich').disabled = false;
+      hideEnrichProgress();
+      setTimeout(() => setFeedback('', ''), 3000);
     }
-    startEnrichPolling();
   } catch (err) {
     setFeedback(`Enrich error: ${err.message}`, 'error');
     $('#btn-enrich').disabled = false;

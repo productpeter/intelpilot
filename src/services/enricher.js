@@ -44,9 +44,9 @@ IMPORTANT:
 
 const ENRICHMENT_CONCURRENCY = 20;
 
-export async function enrichEntities(entities) {
-  console.log(`[Enricher] Starting enrichment for ${entities.length} entities…`);
-  const job = startJob('enrich');
+export async function enrichEntities(entities, jobName = 'enrich') {
+  console.log(`[Enricher] Starting enrichment for ${entities.length} entities (job=${jobName})…`);
+  const job = startJob(jobName);
   job.total = entities.length;
   const results = [];
 
@@ -67,12 +67,12 @@ export async function enrichEntities(entities) {
         } else {
           job.failed++;
         }
-        updateJob('enrich', { completed: job.completed, failed: job.failed });
+        updateJob(jobName, { completed: job.completed, failed: job.failed });
       }
     }
-    finishJob('enrich', `${results.length}/${entities.length} enriched`);
+    finishJob(jobName, `${results.length}/${entities.length} enriched`);
   } catch (err) {
-    failJob('enrich', err.message);
+    failJob(jobName, err.message);
     throw err;
   }
 
