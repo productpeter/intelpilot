@@ -83,9 +83,14 @@ function populateCategories(entities) {
   sel.innerHTML = opts.join('');
 }
 
-const PRICING_RE = /^\$\d[\d,.]*\s*\/\s*(?:mo|month|year|yr|user|seat)/i;
+const PRICING_RE = /^\$?\d[\d,.]*\s*\/\s*(?:mo|month|year|yr|user|seat)/i;
+const BARE_PRICE_RE = /^\$?\d{1,3}(?:\.\d{2})?\s*$/;
 function isPricing(val) {
-  return typeof val === 'string' && PRICING_RE.test(val.trim());
+  if (typeof val !== 'string') return false;
+  const v = val.trim();
+  if (PRICING_RE.test(v)) return true;
+  if (BARE_PRICE_RE.test(v)) return true;
+  return false;
 }
 
 function hasRevenue(e) {
