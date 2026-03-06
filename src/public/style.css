@@ -377,6 +377,12 @@ body {
   max-width: 1400px;
   margin: 0 auto;
   padding: 1.5rem;
+  position: relative;
+}
+
+body {
+  background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 /* Toolbar */
