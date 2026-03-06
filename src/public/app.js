@@ -1082,6 +1082,24 @@ async function checkRunningPipeline() {
     requestAnimationFrame(loop);
   }
 
+  function positionTooltip(node) {
+    let html = `<span class="tt-name">${node.name}</span><span class="tt-cat">${node.category}</span>`;
+    if (node.metric) html += `<span class="tt-metric">${node.metric}</span>`;
+    tooltip.innerHTML = html;
+    tooltip.classList.add('visible');
+    const tw = tooltip.offsetWidth;
+    const th = tooltip.offsetHeight;
+    const margin = 8;
+    let left = node.x + 14;
+    let top = node.y - th - 6;
+    if (left + tw > W - margin) left = node.x - tw - 10;
+    if (left < margin) left = margin;
+    if (top < margin) top = node.y + 14;
+    if (top + th > H - margin) top = H - th - margin;
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+  }
+
   canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -1095,12 +1113,7 @@ async function checkRunningPipeline() {
     hoveredNode = closest;
     if (closest) {
       canvas.style.cursor = 'pointer';
-      let html = `<span class="tt-name">${closest.name}</span><span class="tt-cat">${closest.category}</span>`;
-      if (closest.metric) html += `<span class="tt-metric">${closest.metric}</span>`;
-      tooltip.innerHTML = html;
-      tooltip.classList.add('visible');
-      tooltip.style.left = Math.min(closest.x + 14, W - 200) + 'px';
-      tooltip.style.top = (closest.y - 44) + 'px';
+      positionTooltip(closest);
     } else {
       canvas.style.cursor = 'default';
       tooltip.classList.remove('visible');
@@ -1140,12 +1153,7 @@ async function checkRunningPipeline() {
       }
       touchedNode = closest;
       hoveredNode = closest;
-      let html = `<span class="tt-name">${closest.name}</span><span class="tt-cat">${closest.category}</span>`;
-      if (closest.metric) html += `<span class="tt-metric">${closest.metric}</span>`;
-      tooltip.innerHTML = html;
-      tooltip.classList.add('visible');
-      tooltip.style.left = Math.min(closest.x + 14, W - 200) + 'px';
-      tooltip.style.top = (closest.y - 44) + 'px';
+      positionTooltip(closest);
     } else {
       touchedNode = null;
       hoveredNode = null;
