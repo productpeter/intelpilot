@@ -433,7 +433,6 @@ body {
   padding: 0.4rem 0.65rem;
   font-size: 0.72rem;
   color: var(--text);
-  white-space: nowrap;
   max-width: 220px;
   opacity: 0;
   transition: opacity 0.15s;
@@ -441,8 +440,8 @@ body {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 .cluster-tooltip.visible { opacity: 1; }
-.cluster-tooltip .tt-name { font-weight: 600; color: var(--accent); }
-.cluster-tooltip .tt-cat { color: var(--text-dim); margin-left: 0.3rem; }
+.cluster-tooltip .tt-name { font-weight: 600; color: var(--accent); white-space: nowrap; }
+.cluster-tooltip .tt-cat { color: var(--text-dim); margin-left: 0.3rem; white-space: nowrap; }
 .cluster-tooltip .tt-metric { color: var(--cyan); display: block; margin-top: 0.15rem; }
 
 @media (max-width: 600px) {
