@@ -24,9 +24,11 @@ export async function runFullScan() {
   startJob('scan');
   updateJob('scan', { total: sources.length, message: 'Crawling sources…' });
 
+  const rawPromises = sources.map((source) => runSourceScan(source));
+
   const settled = await Promise.allSettled(
-    sources.map((source) =>
-      withTimeout(runSourceScan(source), SOURCE_TIMEOUT_MS, source.name),
+    rawPromises.map((p, i) =>
+      withTimeout(p, SOURCE_TIMEOUT_MS, sources[i].name),
     ),
   );
 
@@ -37,6 +39,14 @@ export async function runFullScan() {
   );
 
   const ok = results.filter((r) => !r.error).length;
+  const timedOut = results.filter((r) => r.error).length;
+
+  if (timedOut > 0) {
+    console.log(`[Scanner] ${timedOut} source(s) timed out — waiting for them to finish writing…`);
+    await Promise.allSettled(rawPromises);
+    console.log('[Scanner] All sources fully settled');
+  }
+
   finishJob('scan', `${ok}/${sources.length} sources completed`);
   console.log('[Scanner] Full scan complete — starting post-scan pipeline…');
 
@@ -65,6 +75,7 @@ async function triggerPostScanPipeline() {
     console.log('[Scanner] No unenriched entities after scan');
     finishJob('enrich', '0 to enrich');
   }
+
 
   const missingUrlEntities = await col('entities')
     .find({

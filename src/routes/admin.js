@@ -216,16 +216,32 @@ router.delete('/reports/empty', async (req, res) => {
   res.json({ deleted: result.deletedCount });
 });
 
-router.delete('/entities/no-domain', async (req, res) => {
+router.delete('/entities', async (req, res) => {
   try {
-    const match = { $or: [{ domain: { $exists: false } }, { domain: null }, { domain: '' }, { domain: 'n/a' }] };
-    const toDelete = await col('entities').find(match).toArray();
-    const ids = toDelete.map((e) => e._id);
-    if (!ids.length) return res.json({ deleted: 0 });
-    await col('signals').deleteMany({ entity_id: { $in: ids } });
-    await col('evidence').deleteMany({ entity_id: { $in: ids } });
-    const result = await col('entities').deleteMany({ _id: { $in: ids } });
-    res.json({ deleted: result.deletedCount, names: toDelete.map((e) => e.name) });
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || !ids.length) {
+      return res.status(400).json({ error: 'Provide { ids: [...] } array of entity _id strings' });
+    }
+    const { ObjectId } = await import('mongodb');
+    const objectIds = ids.map((id) => new ObjectId(id));
+    await col('signals').deleteMany({ entity_id: { $in: objectIds } });
+    await col('evidence').deleteMany({ entity_id: { $in: objectIds } });
+    const result = await col('entities').deleteMany({ _id: { $in: objectIds } });
+    res.json({ deleted: result.deletedCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/wipe', async (req, res) => {
+  try {
+    const collections = ['entities', 'signals', 'evidence', 'discoveries', 'scan_runs', 'raw_pages', 'reports'];
+    const results = {};
+    for (const name of collections) {
+      const r = await col(name).deleteMany({});
+      results[name] = r.deletedCount;
+    }
+    res.json({ wiped: results });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
