@@ -289,16 +289,7 @@ body {
   transition: width 0.5s ease;
 }
 
-.nav-btn.enrich {
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-
-.nav-btn.enrich:hover {
-  background: var(--surface-3, var(--surface-2));
-  border-color: var(--accent);
-}
+.nav-btn.enrich:hover { border-color: var(--blue); color: var(--blue); }
 
 .pipeline-progress {
   max-width: 1400px;

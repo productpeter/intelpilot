@@ -128,15 +128,12 @@ router.post('/enrich', async (req, res) => {
 router.post('/re-enrich', async (req, res) => {
   try {
     const entities = await col('entities')
-      .find({
-        'classification.is_startup': true,
-        enrichment: { $exists: true },
-      })
+      .find({ 'classification.is_startup': true })
       .sort({ updated_at: -1 })
       .toArray();
 
     if (!entities.length) {
-      return res.json({ message: 'No enriched entities found', count: 0 });
+      return res.json({ message: 'No startup entities found', count: 0 });
     }
 
     await col('entities').updateMany(
