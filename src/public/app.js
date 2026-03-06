@@ -970,12 +970,13 @@ function escChat(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+const markedInstance = new marked.Marked({
+  breaks: true,
+  gfm: true,
+});
+
 function renderMarkdown(text) {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>');
+  return markedInstance.parse(text);
 }
 
 function appendChatMsg(role, content) {
@@ -1035,7 +1036,7 @@ async function sendChat(msg) {
           if (error) throw new Error(error);
           if (token) {
             fullText += token;
-            contentEl.innerHTML = renderMarkdown(escChat(fullText));
+            contentEl.innerHTML = renderMarkdown(fullText);
             $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
           }
         } catch {}
