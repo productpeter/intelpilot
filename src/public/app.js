@@ -900,28 +900,71 @@ async function checkRunningPipeline() {
   }
 }
 
-// ── Chat Panel ──
+// ── Chat ──
 const chatHistory = [];
 let chatStreaming = false;
 
-$('#chat-fab').addEventListener('click', () => {
-  const panel = $('#chat-panel');
-  panel.hidden = !panel.hidden;
-  if (!panel.hidden) $('#chat-input').focus();
-});
+const EXAMPLE_QUESTIONS = [
+  'Which startups raised the most funding?',
+  'Compare AI video generation companies',
+  'What startups use React in their stack?',
+  'Which YC companies are in the database?',
+  'Show me startups with the most traffic',
+  'What are the fastest growing startups?',
+  'Which companies have the most employees?',
+  'Find startups in the NLP space',
+  'Who are the solo founder startups?',
+  'What startups were founded in 2024?',
+  'Which startups have revenue data?',
+  'Compare the top-funded AI startups',
+];
+
+let exampleIdx = 0;
+let exampleTimer = null;
+
+function showExamples() {
+  const container = $('#chat-examples');
+  container.innerHTML = '';
+  const batch = [];
+  for (let i = 0; i < 3; i++) {
+    batch.push(EXAMPLE_QUESTIONS[(exampleIdx + i) % EXAMPLE_QUESTIONS.length]);
+  }
+  exampleIdx = (exampleIdx + 3) % EXAMPLE_QUESTIONS.length;
+  batch.forEach((q) => {
+    const chip = document.createElement('button');
+    chip.className = 'chat-example-chip fade-in';
+    chip.textContent = q;
+    chip.addEventListener('click', () => sendChat(q));
+    container.appendChild(chip);
+  });
+}
+
+function startExampleRotation() {
+  showExamples();
+  exampleTimer = setInterval(showExamples, 6000);
+}
+
+function stopExampleRotation() {
+  if (exampleTimer) { clearInterval(exampleTimer); exampleTimer = null; }
+}
+
+function openChatModal() {
+  $('#chat-overlay').hidden = false;
+  stopExampleRotation();
+  setTimeout(() => $('#chat-modal-input').focus(), 50);
+}
 
 $('#chat-close').addEventListener('click', () => {
-  $('#chat-panel').hidden = true;
+  $('#chat-overlay').hidden = true;
+  if (chatHistory.length === 0) startExampleRotation();
 });
 
-function appendChatMsg(role, content) {
-  const el = document.createElement('div');
-  el.className = `chat-msg ${role}`;
-  el.innerHTML = `<div class="chat-msg-content">${content}</div>`;
-  $('#chat-messages').appendChild(el);
-  $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
-  return el.querySelector('.chat-msg-content');
-}
+$('#chat-overlay').addEventListener('click', (e) => {
+  if (e.target === $('#chat-overlay')) {
+    $('#chat-overlay').hidden = true;
+    if (chatHistory.length === 0) startExampleRotation();
+  }
+});
 
 function escChat(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -935,15 +978,25 @@ function renderMarkdown(text) {
     .replace(/\n/g, '<br>');
 }
 
-$('#chat-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const input = $('#chat-input');
-  const msg = input.value.trim();
+function appendChatMsg(role, content) {
+  const el = document.createElement('div');
+  el.className = `chat-msg ${role}`;
+  el.innerHTML = `<div class="chat-msg-content">${content}</div>`;
+  $('#chat-messages').appendChild(el);
+  $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
+  return el.querySelector('.chat-msg-content');
+}
+
+async function sendChat(msg) {
   if (!msg || chatStreaming) return;
+
+  if ($('#chat-overlay').hidden) openChatModal();
 
   appendChatMsg('user', escChat(msg));
   chatHistory.push({ role: 'user', content: msg });
-  input.value = '';
+
+  $('#chat-input').value = '';
+  $('#chat-modal-input').value = '';
 
   chatStreaming = true;
   $('#chat-send').disabled = true;
@@ -999,9 +1052,27 @@ $('#chat-form').addEventListener('submit', async (e) => {
   } finally {
     chatStreaming = false;
     $('#chat-send').disabled = false;
-    $('#chat-input').focus();
+    if (!$('#chat-overlay').hidden) $('#chat-modal-input').focus();
+  }
+}
+
+$('#chat-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    sendChat($('#chat-input').value.trim());
   }
 });
+
+$('#chat-send').addEventListener('click', () => {
+  sendChat($('#chat-input').value.trim());
+});
+
+$('#chat-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  sendChat($('#chat-modal-input').value.trim());
+});
+
+startExampleRotation();
 
 checkHealth();
 loadEntities();
