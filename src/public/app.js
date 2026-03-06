@@ -948,13 +948,15 @@ async function checkRunningPipeline() {
     nodes = [];
     clusterCenters = [];
     const cats = {};
+    const mobile = W < 500;
+    const s = mobile ? 0.55 : 1;
 
     for (const d of data) {
       const cat = d.category || 'Other';
       const color = CATEGORY_COLORS[cat] || DEFAULT_COLOR;
       const hasRevenue = !!d.revenue;
       const hasFunding = !!d.funding;
-      const size = hasRevenue ? 5.5 : hasFunding ? 4 : 2.5;
+      const size = (hasRevenue ? 5.5 : hasFunding ? 4 : 2.5) * s;
       const px = PAD + d.x * (W - PAD * 2);
       const py = PAD + d.y * (H - PAD * 2);
 
