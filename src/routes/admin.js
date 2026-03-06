@@ -255,4 +255,26 @@ router.delete('/wipe', async (req, res) => {
   }
 });
 
+router.post('/scan/purge-batch', async (req, res) => {
+  try {
+    const { after, before } = req.body || {};
+    if (!after || !before) {
+      return res.status(400).json({ error: 'Provide { after: "ISO date", before: "ISO date" }' });
+    }
+    const range = { $gte: new Date(after), $lte: new Date(before) };
+
+    const runs = await col('scan_runs').deleteMany({ started_at: range });
+    const discoveries = await col('discoveries').deleteMany({ discovered_at: range });
+    const rawPages = await col('raw_pages').deleteMany({ fetched_at: range });
+
+    res.json({
+      scan_runs: runs.deletedCount,
+      discoveries: discoveries.deletedCount,
+      raw_pages: rawPages.deletedCount,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
