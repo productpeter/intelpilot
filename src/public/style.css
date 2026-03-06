@@ -380,6 +380,63 @@ body {
   position: relative;
 }
 
+.hero-heading {
+  text-align: center;
+  padding: 2rem 1rem 1.5rem;
+}
+.hero-heading h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--text) 0%, var(--accent) 60%, var(--cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.3;
+}
+.hero-sub {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  margin-top: 0.4rem;
+}
+
+.cluster-viz-wrap {
+  position: relative;
+  max-width: 900px;
+  margin: 0 auto;
+  height: 220px;
+}
+.cluster-viz-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.cluster-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.72rem;
+  color: var(--text);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 10;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.cluster-tooltip.visible { opacity: 1; }
+.cluster-tooltip .tt-name { font-weight: 600; color: var(--accent); }
+.cluster-tooltip .tt-cat { color: var(--text-dim); margin-left: 0.3rem; }
+.cluster-tooltip .tt-metric { color: var(--cyan); display: block; margin-top: 0.15rem; }
+
+@media (max-width: 600px) {
+  .hero-heading h1 { font-size: 1.2rem; }
+  .hero-heading { padding: 1.5rem 0.5rem 0.25rem; }
+  .cluster-viz-wrap { height: 160px; }
+}
+
 body {
   background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
   background-size: 24px 24px;

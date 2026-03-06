@@ -66,6 +66,29 @@
 </nav>
 
 <main class="main">
+  <div class="hero-heading">
+    <h1>Continuous Intelligence for the AI Startup Landscape</h1>
+    <p class="hero-sub">Real-time discovery, enrichment, and analysis — powered by agentic research.</p>
+  </div>
+
+  <div class="cluster-viz-wrap">
+    <canvas id="cluster-canvas"></canvas>
+    <div class="cluster-tooltip" id="cluster-tooltip"></div>
+  </div>
+
+  <div class="chat-bar" id="chat-bar">
+    <div class="chat-bar-inner">
+      <div class="chat-bar-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <input type="text" class="chat-bar-input" id="chat-input" placeholder="Ask IntelPilot AI anything…" autocomplete="off">
+      <button type="button" class="chat-bar-send" id="chat-send">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+    <div class="chat-examples" id="chat-examples"></div>
+  </div>
+
   <div class="toolbar">
     <div class="toolbar-left">
       <h2 class="page-title">Discovered Startups</h2>
@@ -86,19 +109,6 @@
         <option value="name">Name A–Z</option>
       </select>
     </div>
-  </div>
-
-  <div class="chat-bar" id="chat-bar">
-    <div class="chat-bar-inner">
-      <div class="chat-bar-icon">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      </div>
-      <input type="text" class="chat-bar-input" id="chat-input" placeholder="Ask IntelPilot AI anything…" autocomplete="off">
-      <button type="button" class="chat-bar-send" id="chat-send">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      </button>
-    </div>
-    <div class="chat-examples" id="chat-examples"></div>
   </div>
 
   <div class="entity-grid" id="entity-grid">

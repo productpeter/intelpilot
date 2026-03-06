@@ -900,6 +900,202 @@ async function checkRunningPipeline() {
   }
 }
 
+// ── Cluster Visualization ──
+(function initClusterViz() {
+  const canvas = document.getElementById('cluster-canvas');
+  const tooltip = document.getElementById('cluster-tooltip');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+
+  const CATEGORY_COLORS = {
+    'AI SaaS': '#6366f1', 'AI Agent': '#a855f7', 'AI Developer Tools': '#3b82f6',
+    'AI Healthcare': '#22c55e', 'AI Finance': '#eab308', 'AI Research': '#06b6d4',
+    'AI Infrastructure': '#f97316', 'AI EdTech': '#ec4899', 'AI Marketing': '#14b8a6',
+    'AI Media': '#f43f5e', 'LLM Tool': '#8b5cf6', 'AI Video': '#ef4444',
+    'AI Design': '#d946ef', 'AI Security': '#0ea5e9', 'AI E-commerce': '#84cc16',
+  };
+  const DEFAULT_COLOR = '#6366f1';
+
+  let nodes = [];
+  let W = 0, H = 0;
+  let animId = null;
+  let hoveredNode = null;
+
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    W = rect.width;
+    H = rect.height;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function buildNodes(entities) {
+    const cats = {};
+    entities.forEach((e) => {
+      const cat = e.classification?.category || 'Other';
+      if (!cats[cat]) cats[cat] = [];
+      cats[cat].push(e);
+    });
+
+    const catNames = Object.keys(cats).sort((a, b) => cats[b].length - cats[a].length);
+    const clusterCount = catNames.length;
+    nodes = [];
+
+    catNames.forEach((cat, ci) => {
+      const color = CATEGORY_COLORS[cat] || DEFAULT_COLOR;
+      const angle = (ci / clusterCount) * Math.PI * 2 + Math.PI / 4;
+      const cx = W * 0.5 + Math.cos(angle) * W * 0.25;
+      const cy = H * 0.5 + Math.sin(angle) * H * 0.28;
+
+      cats[cat].forEach((e, ei) => {
+        const spread = Math.min(cats[cat].length * 2, W * 0.15);
+        const a2 = (ei / cats[cat].length) * Math.PI * 2 + ci;
+        const r = Math.random() * spread;
+        const m = e.enrichment?.metrics || {};
+        const hasRevenue = !!m.revenue;
+        const hasFunding = !!m.funding;
+        const size = hasRevenue ? 4.5 : hasFunding ? 3.5 : 2.5;
+
+        nodes.push({
+          x: cx + Math.cos(a2) * r,
+          y: cy + Math.sin(a2) * r,
+          vx: (Math.random() - 0.5) * 0.15,
+          vy: (Math.random() - 0.5) * 0.15,
+          size,
+          color,
+          alpha: hasRevenue ? 0.9 : hasFunding ? 0.7 : 0.4,
+          name: e.classification?.clean_name || e.name,
+          category: cat,
+          metric: m.revenue || m.funding || m.monthly_traffic || null,
+          entity: e,
+        });
+      });
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    const connectionDist = 50;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[i].x - nodes[j].x;
+        const dy = nodes[i].y - nodes[j].y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < connectionDist && nodes[i].color === nodes[j].color) {
+          const a = (1 - d / connectionDist) * 0.12;
+          ctx.strokeStyle = nodes[i].color;
+          ctx.globalAlpha = a;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(nodes[i].x, nodes[i].y);
+          ctx.lineTo(nodes[j].x, nodes[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    for (const n of nodes) {
+      const isHovered = n === hoveredNode;
+      ctx.globalAlpha = isHovered ? 1 : n.alpha;
+      ctx.fillStyle = n.color;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, isHovered ? n.size + 2 : n.size, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (isHovered) {
+        ctx.globalAlpha = 0.2;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.size + 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function update() {
+    for (const n of nodes) {
+      n.x += n.vx;
+      n.y += n.vy;
+      if (n.x < 10 || n.x > W - 10) n.vx *= -1;
+      if (n.y < 10 || n.y > H - 10) n.vy *= -1;
+      n.vx += (Math.random() - 0.5) * 0.01;
+      n.vy += (Math.random() - 0.5) * 0.01;
+      n.vx *= 0.999;
+      n.vy *= 0.999;
+    }
+  }
+
+  function loop() {
+    update();
+    draw();
+    animId = requestAnimationFrame(loop);
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    let closest = null;
+    let closestDist = 20;
+    for (const n of nodes) {
+      const d = Math.sqrt((n.x - mx) ** 2 + (n.y - my) ** 2);
+      if (d < closestDist) { closest = n; closestDist = d; }
+    }
+    hoveredNode = closest;
+    if (closest) {
+      canvas.style.cursor = 'pointer';
+      let html = `<span class="tt-name">${closest.name}</span><span class="tt-cat">${closest.category}</span>`;
+      if (closest.metric) html += `<span class="tt-metric">${closest.metric}</span>`;
+      tooltip.innerHTML = html;
+      tooltip.classList.add('visible');
+      const tx = Math.min(closest.x + 12, W - 180);
+      const ty = closest.y - 40;
+      tooltip.style.left = tx + 'px';
+      tooltip.style.top = ty + 'px';
+    } else {
+      canvas.style.cursor = 'default';
+      tooltip.classList.remove('visible');
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    hoveredNode = null;
+    tooltip.classList.remove('visible');
+    canvas.style.cursor = 'default';
+  });
+
+  canvas.addEventListener('click', () => {
+    if (hoveredNode?.entity?._id) {
+      openEntityModal(hoveredNode.entity._id);
+    }
+  });
+
+  async function load() {
+    resize();
+    try {
+      const { data } = await api('GET', '/entities?limit=400&sort=updated_at&order=desc');
+      if (data.length) {
+        buildNodes(data);
+        loop();
+      }
+    } catch (err) {
+      console.warn('[ClusterViz] Failed to load:', err.message);
+    }
+  }
+
+  window.addEventListener('resize', () => {
+    resize();
+    if (nodes.length) buildNodes(nodes.map((n) => n.entity));
+  });
+
+  load();
+})();
+
 // ── Chat ──
 const chatHistory = [];
 let chatStreaming = false;
