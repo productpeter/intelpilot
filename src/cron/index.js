@@ -6,6 +6,11 @@ import { getAllJobs } from '../services/progress.js';
 let scanRunning = false;
 
 export function startCronJobs() {
+  if (config.env === 'development') {
+    console.log('[Cron] Skipping cron in development — use the dashboard button to trigger scans');
+    return;
+  }
+
   const tz = process.env.TZ || Intl.DateTimeFormat().resolvedOptions().timeZone;
   console.log(`[Cron] Container timezone: ${tz}, forcing UTC for schedule`);
 
