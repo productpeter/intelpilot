@@ -403,8 +403,8 @@ body {
 .cluster-viz-wrap {
   position: relative;
   max-width: 900px;
-  margin: 0 auto;
-  height: 220px;
+  margin: 0.5rem auto 2rem;
+  height: 280px;
 }
 .cluster-viz-wrap canvas {
   width: 100%;
@@ -434,7 +434,7 @@ body {
 @media (max-width: 600px) {
   .hero-heading h1 { font-size: 1.2rem; }
   .hero-heading { padding: 1.5rem 0.5rem 0.25rem; }
-  .cluster-viz-wrap { height: 160px; }
+  .cluster-viz-wrap { height: 200px; }
 }
 
 body {

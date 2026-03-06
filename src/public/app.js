@@ -900,7 +900,7 @@ async function checkRunningPipeline() {
   }
 }
 
-// ── Cluster Visualization ──
+// ── Cluster Visualization (real embedding projection) ──
 (function initClusterViz() {
   const canvas = document.getElementById('cluster-canvas');
   const tooltip = document.getElementById('cluster-tooltip');
@@ -918,8 +918,9 @@ async function checkRunningPipeline() {
   const DEFAULT_COLOR = '#6366f1';
 
   let nodes = [];
+  let clusterCenters = [];
+  let rawData = null;
   let W = 0, H = 0;
-  let animId = null;
   let hoveredNode = null;
 
   function resize() {
@@ -933,63 +934,77 @@ async function checkRunningPipeline() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function buildNodes(entities) {
-    const cats = {};
-    entities.forEach((e) => {
-      const cat = e.classification?.category || 'Other';
-      if (!cats[cat]) cats[cat] = [];
-      cats[cat].push(e);
-    });
+  const PAD = 30;
 
-    const catNames = Object.keys(cats).sort((a, b) => cats[b].length - cats[a].length);
-    const clusterCount = catNames.length;
+  function buildNodes(data) {
     nodes = [];
+    clusterCenters = [];
+    const cats = {};
 
-    catNames.forEach((cat, ci) => {
+    for (const d of data) {
+      const cat = d.category || 'Other';
       const color = CATEGORY_COLORS[cat] || DEFAULT_COLOR;
-      const angle = (ci / clusterCount) * Math.PI * 2 + Math.PI / 4;
-      const cx = W * 0.5 + Math.cos(angle) * W * 0.25;
-      const cy = H * 0.5 + Math.sin(angle) * H * 0.28;
+      const hasRevenue = !!d.revenue;
+      const hasFunding = !!d.funding;
+      const size = hasRevenue ? 5.5 : hasFunding ? 4 : 2.5;
+      const px = PAD + d.x * (W - PAD * 2);
+      const py = PAD + d.y * (H - PAD * 2);
 
-      cats[cat].forEach((e, ei) => {
-        const spread = Math.min(cats[cat].length * 2, W * 0.15);
-        const a2 = (ei / cats[cat].length) * Math.PI * 2 + ci;
-        const r = Math.random() * spread;
-        const m = e.enrichment?.metrics || {};
-        const hasRevenue = !!m.revenue;
-        const hasFunding = !!m.funding;
-        const size = hasRevenue ? 4.5 : hasFunding ? 3.5 : 2.5;
+      if (!cats[cat]) cats[cat] = { sx: 0, sy: 0, n: 0, color };
+      cats[cat].sx += px;
+      cats[cat].sy += py;
+      cats[cat].n++;
 
-        nodes.push({
-          x: cx + Math.cos(a2) * r,
-          y: cy + Math.sin(a2) * r,
-          vx: (Math.random() - 0.5) * 0.15,
-          vy: (Math.random() - 0.5) * 0.15,
-          size,
-          color,
-          alpha: hasRevenue ? 0.9 : hasFunding ? 0.7 : 0.4,
-          name: e.classification?.clean_name || e.name,
-          category: cat,
-          metric: m.revenue || m.funding || m.monthly_traffic || null,
-          entity: e,
-        });
+      nodes.push({
+        baseX: px, baseY: py,
+        x: px, y: py,
+        vx: (Math.random() - 0.5) * 0.12,
+        vy: (Math.random() - 0.5) * 0.12,
+        size, color,
+        alpha: hasRevenue ? 0.95 : hasFunding ? 0.7 : 0.35,
+        name: d.name,
+        category: cat,
+        metric: d.revenue || d.funding || d.traffic || null,
+        techStack: d.tech_stack || null,
+        _id: d._id,
+        glow: hasRevenue,
       });
-    });
+    }
+
+    for (const [cat, info] of Object.entries(cats)) {
+      if (info.n < 3) continue;
+      clusterCenters.push({
+        cat, color: info.color,
+        cx: info.sx / info.n,
+        cy: info.sy / info.n,
+        count: info.n,
+      });
+    }
   }
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
 
-    const connectionDist = 50;
+    for (const c of clusterCenters) {
+      const r = Math.max(40, Math.sqrt(c.count) * 18);
+      const grad = ctx.createRadialGradient(c.cx, c.cy, 0, c.cx, c.cy, r);
+      grad.addColorStop(0, c.color + '10');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(c.cx, c.cy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const connectionDist = 40;
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         const dx = nodes[i].x - nodes[j].x;
         const dy = nodes[i].y - nodes[j].y;
         const d = Math.sqrt(dx * dx + dy * dy);
         if (d < connectionDist && nodes[i].color === nodes[j].color) {
-          const a = (1 - d / connectionDist) * 0.12;
           ctx.strokeStyle = nodes[i].color;
-          ctx.globalAlpha = a;
+          ctx.globalAlpha = (1 - d / connectionDist) * 0.18;
           ctx.lineWidth = 0.5;
           ctx.beginPath();
           ctx.moveTo(nodes[i].x, nodes[i].y);
@@ -1001,19 +1016,40 @@ async function checkRunningPipeline() {
 
     for (const n of nodes) {
       const isHovered = n === hoveredNode;
+      if (n.glow) {
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = n.color;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.size + 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = isHovered ? 1 : n.alpha;
       ctx.fillStyle = n.color;
       ctx.beginPath();
-      ctx.arc(n.x, n.y, isHovered ? n.size + 2 : n.size, 0, Math.PI * 2);
+      ctx.arc(n.x, n.y, isHovered ? n.size + 2.5 : n.size, 0, Math.PI * 2);
       ctx.fill();
-
       if (isHovered) {
         ctx.globalAlpha = 0.2;
         ctx.beginPath();
-        ctx.arc(n.x, n.y, n.size + 8, 0, Math.PI * 2);
+        ctx.arc(n.x, n.y, n.size + 12, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+
+    ctx.globalAlpha = 0.55;
+    ctx.textAlign = 'center';
+    for (const c of clusterCenters) {
+      if (c.count < 5) continue;
+      const label = c.cat.replace('AI ', '');
+      ctx.font = '600 9.5px Inter, system-ui, sans-serif';
+      ctx.fillStyle = c.color;
+      ctx.fillText(label, c.cx, c.cy - 22);
+      ctx.globalAlpha = 0.28;
+      ctx.font = '500 7.5px Inter, system-ui, sans-serif';
+      ctx.fillText(c.count + '', c.cx, c.cy - 13);
+      ctx.globalAlpha = 0.55;
+    }
+
     ctx.globalAlpha = 1;
   }
 
@@ -1021,19 +1057,21 @@ async function checkRunningPipeline() {
     for (const n of nodes) {
       n.x += n.vx;
       n.y += n.vy;
-      if (n.x < 10 || n.x > W - 10) n.vx *= -1;
-      if (n.y < 10 || n.y > H - 10) n.vy *= -1;
-      n.vx += (Math.random() - 0.5) * 0.01;
-      n.vy += (Math.random() - 0.5) * 0.01;
-      n.vx *= 0.999;
-      n.vy *= 0.999;
+      const dx = n.baseX - n.x;
+      const dy = n.baseY - n.y;
+      n.vx += dx * 0.001;
+      n.vy += dy * 0.001;
+      n.vx += (Math.random() - 0.5) * 0.008;
+      n.vy += (Math.random() - 0.5) * 0.008;
+      n.vx *= 0.99;
+      n.vy *= 0.99;
     }
   }
 
   function loop() {
     update();
     draw();
-    animId = requestAnimationFrame(loop);
+    requestAnimationFrame(loop);
   }
 
   canvas.addEventListener('mousemove', (e) => {
@@ -1041,7 +1079,7 @@ async function checkRunningPipeline() {
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     let closest = null;
-    let closestDist = 20;
+    let closestDist = 18;
     for (const n of nodes) {
       const d = Math.sqrt((n.x - mx) ** 2 + (n.y - my) ** 2);
       if (d < closestDist) { closest = n; closestDist = d; }
@@ -1053,10 +1091,8 @@ async function checkRunningPipeline() {
       if (closest.metric) html += `<span class="tt-metric">${closest.metric}</span>`;
       tooltip.innerHTML = html;
       tooltip.classList.add('visible');
-      const tx = Math.min(closest.x + 12, W - 180);
-      const ty = closest.y - 40;
-      tooltip.style.left = tx + 'px';
-      tooltip.style.top = ty + 'px';
+      tooltip.style.left = Math.min(closest.x + 14, W - 200) + 'px';
+      tooltip.style.top = (closest.y - 44) + 'px';
     } else {
       canvas.style.cursor = 'default';
       tooltip.classList.remove('visible');
@@ -1070,17 +1106,16 @@ async function checkRunningPipeline() {
   });
 
   canvas.addEventListener('click', () => {
-    if (hoveredNode?.entity?._id) {
-      openEntityModal(hoveredNode.entity._id);
-    }
+    if (hoveredNode?._id) openEntityModal(hoveredNode._id);
   });
 
   async function load() {
     resize();
     try {
-      const { data } = await api('GET', '/entities?limit=400&sort=updated_at&order=desc');
-      if (data.length) {
-        buildNodes(data);
+      const res = await api('GET', '/entities/cluster-map');
+      if (res.nodes?.length) {
+        rawData = res.nodes;
+        buildNodes(rawData);
         loop();
       }
     } catch (err) {
@@ -1090,7 +1125,7 @@ async function checkRunningPipeline() {
 
   window.addEventListener('resize', () => {
     resize();
-    if (nodes.length) buildNodes(nodes.map((n) => n.entity));
+    if (rawData) buildNodes(rawData);
   });
 
   load();
