@@ -712,13 +712,13 @@ function stopEnrichPolling() {
 $('#btn-enrich').addEventListener('click', async () => {
   if (!confirm('Re-enrich all startup entities? This will update metrics, evidence links, and news for every entity.')) return;
   $('#btn-enrich').disabled = true;
-  setFeedback('Starting enrichment…', 'loading');
+  setFeedback('Re-enrichment underway…', 'loading');
   showEnrichProgress();
   updateEnrichBar(0, 0, 0);
   try {
     const res = await api('POST', '/admin/re-enrich');
     if (res.count > 0) {
-      setFeedback(`Re-enriching ${res.count} entities…`, 'loading');
+      setFeedback(`Re-enrichment underway — ${res.count} entities…`, 'loading');
       startEnrichPolling();
     } else {
       setFeedback('No entities to enrich', 'info');
@@ -736,7 +736,7 @@ $('#btn-enrich').addEventListener('click', async () => {
 
 $('#btn-scan').addEventListener('click', async () => {
   $('#btn-scan').disabled = true;
-  setFeedback('Starting scan pipeline…', 'loading');
+  setFeedback('Scan underway…', 'loading');
   resetPipeline();
   showPipeline();
   try {
@@ -893,7 +893,7 @@ async function checkRunningPipeline() {
       setStepState('report', 'active', jobs.report.message || 'generating…');
     }
 
-    setFeedback('Pipeline in progress…', 'loading');
+    setFeedback('Pipeline underway…', 'loading');
     startPipelinePolling();
   } catch {
     // ignore — no running pipeline
