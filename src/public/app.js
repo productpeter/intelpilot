@@ -218,12 +218,14 @@ function renderCard(e) {
   const fund = metricStr(metrics.funding);
   const users = metricStr(metrics.user_count);
   const team = metricStr(metrics.team_size);
+  const traffic = metricStr(metrics.monthly_traffic);
 
   let metricBadges = '';
-  if (rev) metricBadges += `<span class="metric-badge revenue">$ ${escHtml(rev)}</span>`;
-  if (fund) metricBadges += `<span class="metric-badge funding">↑ ${escHtml(fund)}</span>`;
-  if (users) metricBadges += `<span class="metric-badge users">👤 ${escHtml(users)}</span>`;
-  if (team) metricBadges += `<span class="metric-badge team">⚙ ${escHtml(team)}</span>`;
+  if (rev) metricBadges += `<span class="metric-badge revenue">💰 ${escHtml(rev)}</span>`;
+  if (fund) metricBadges += `<span class="metric-badge funding">🚀 ${escHtml(fund)}</span>`;
+  if (traffic) metricBadges += `<span class="metric-badge traffic">📊 ${escHtml(traffic)}</span>`;
+  if (users) metricBadges += `<span class="metric-badge users">👥 ${escHtml(users)}</span>`;
+  if (team) metricBadges += `<span class="metric-badge team">🧑‍💻 ${escHtml(team)}</span>`;
 
   return `
     <div class="entity-card" data-id="${e._id}">
@@ -308,6 +310,7 @@ async function openEntityModal(id) {
     const metricFields = [
       ['Revenue', rawRevModal && !isPricing(rawRevModal) ? rawRevModal : null, metrics.revenue_source],
       ['Funding', metricStr(metrics.funding), metrics.funding_source],
+      ['Traffic', metricStr(metrics.monthly_traffic), metrics.monthly_traffic_source],
       ['Users', metricStr(metrics.user_count), metrics.user_count_source],
       ['Team Size', metricStr(metrics.team_size), metrics.team_size_source],
       ['Growth', metricStr(metrics.growth), metrics.growth_source],
@@ -337,6 +340,22 @@ async function openEntityModal(id) {
           <p style="font-size:0.85rem;color:var(--text-dim);">${escHtml(metrics.notable)}</p>
         </div>
       `;
+    }
+
+    let techStackHtml = '';
+    if (metrics.tech_stack) {
+      const techs = metrics.tech_stack.split(',').map((t) => t.trim()).filter(Boolean);
+      if (techs.length) {
+        const tsSource = metricStr(metrics.tech_stack_source);
+        techStackHtml = `
+          <div class="modal-section">
+            <h3>Tech Stack${tsSource ? ` <a href="${escAttr(tsSource)}" target="_blank" rel="noopener" class="metric-source-link">source</a>` : ''}</h3>
+            <div class="tech-stack-tags">
+              ${techs.map((t) => `<span class="tech-stack-tag">${escHtml(t)}</span>`).join('')}
+            </div>
+          </div>
+        `;
+      }
     }
 
     let discoveriesHtml = '';
@@ -436,6 +455,7 @@ async function openEntityModal(id) {
       ${url ? `<a href="${escAttr(url)}" target="_blank" rel="noopener" class="modal-url">${escHtml(url)}</a>` : ''}
       ${metricsHtml}
       ${notableHtml}
+      ${techStackHtml}
       ${newsHtml}
       ${discoveriesHtml}
       ${signalsHtml}

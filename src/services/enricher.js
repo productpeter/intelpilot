@@ -11,20 +11,24 @@ const EXTRACT_PROMPT = `You are a startup data extractor. Given research text ab
   "matched_name": "The exact company/product name found in the research",
   "domain_status": "One of: active, parked, for_sale, dead, unknown",
   "revenue": "ACTUAL company revenue/MRR/ARR figure, e.g. '$50K MRR' or '$1.2M ARR', or null. Do NOT include product pricing like '$49/month' or '$99/year' — those are prices, not revenue",
-  "revenue_source": "URL where the revenue data was found, or null",
+  "revenue_source": "Third-party URL where the revenue data was published (e.g. TechCrunch article, Crunchbase page), or null",
   "funding": "Single string summary, e.g. '$2M seed from Y Combinator' or '$50M Series A', or null",
-  "funding_source": "URL where the funding data was found, or null",
+  "funding_source": "Third-party URL where the funding data was published, or null",
   "team_size": "Single string, e.g. '12 employees' or 'solo founder', or null",
-  "team_size_source": "URL where team size data was found, or null",
+  "team_size_source": "Third-party URL where team size data was published (e.g. LinkedIn, Crunchbase), or null",
   "user_count": "Single string, e.g. '10K users' or '500 customers', or null",
-  "user_count_source": "URL where user/customer count data was found, or null",
+  "user_count_source": "Third-party URL where user/customer count was published, or null",
   "growth": "Single string, e.g. '30% MoM growth' or 'doubled in 3 months', or null",
-  "growth_source": "URL where growth data was found, or null",
+  "growth_source": "Third-party URL where growth data was published, or null",
+  "monthly_traffic": "Estimated monthly website visits from SimilarWeb or similar traffic analysis, e.g. '1.2M visits/month' or '50K monthly visitors', or null. Only use data from traffic analysis sources, do NOT guess.",
+  "monthly_traffic_source": "SimilarWeb URL or other traffic analysis source URL, e.g. 'https://www.similarweb.com/website/example.com/', or null",
+  "tech_stack": "Comma-separated list of key technologies, frameworks, or infrastructure, e.g. 'React, Python, AWS, PostgreSQL', or null",
+  "tech_stack_source": "URL where tech stack info was found (e.g. StackShare, BuiltWith, company engineering blog, GitHub), or null",
   "founded_year": "Year as a string, e.g. '2024', or null",
   "description": "A concise 1-2 sentence description of what the company does",
   "website": "Primary website URL if found, or null",
   "notable": "Any notable facts (e.g. YC batch, notable customers, awards)",
-  "notable_source": "URL where the notable fact was found, or null",
+  "notable_source": "Third-party URL where the notable fact was published, or null",
   "recent_news": [
     {
       "title": "Article headline",
@@ -39,7 +43,7 @@ IMPORTANT:
 - Every field except "recent_news" must be either null or a plain string. NEVER return objects or arrays for those fields.
 - "recent_news" is an array of objects (up to 5 most recent). Return an empty array [] if no news articles are found.
 - Only include data explicitly stated in the research. Do not guess or fabricate numbers.
-- For _source fields: provide the EXACT URL from the research text where the data was cited. If no specific URL is mentioned in the research for a metric, you MUST return null. NEVER fabricate or guess URLs. NEVER use example.com or placeholder URLs.
+- For _source fields: provide the EXACT URL from the research text where the data was cited. Source URLs should be articles, Crunchbase pages, LinkedIn, SimilarWeb, StackShare, blog posts, or press releases — NOT the company's bare homepage. A deep page on the company's site (e.g. /blog/funding-announcement) is acceptable, but their homepage (e.g. https://company.com/) is NOT a valid source. For monthly_traffic_source, use the SimilarWeb URL for that domain. NEVER fabricate or guess URLs. NEVER use example.com or placeholder URLs.
 - For recent_news: only include real articles with actual URLs that appear in the research text. NEVER invent article URLs. If no real article URLs are found, return an empty array [].`;
 
 const ENRICHMENT_CONCURRENCY = 20;
@@ -104,7 +108,7 @@ async function enrichSingle(entity) {
   }
 
   const NULL_STRINGS = new Set(['null', 'n/a', 'N/A', 'none', 'None', 'unknown', 'Unknown', '']);
-  const allMetricKeys = ['revenue', 'revenue_source', 'funding', 'funding_source', 'team_size', 'team_size_source', 'user_count', 'user_count_source', 'growth', 'growth_source', 'founded_year', 'notable', 'notable_source', 'description', 'website'];
+  const allMetricKeys = ['revenue', 'revenue_source', 'funding', 'funding_source', 'team_size', 'team_size_source', 'user_count', 'user_count_source', 'growth', 'growth_source', 'monthly_traffic', 'monthly_traffic_source', 'tech_stack', 'tech_stack_source', 'founded_year', 'notable', 'notable_source', 'description', 'website'];
   for (const key of allMetricKeys) {
     const v = metrics[key];
     if (v && typeof v === 'object') {
@@ -121,8 +125,28 @@ async function enrichSingle(entity) {
     return url && typeof url === 'string' && url.startsWith('http') && !FAKE_URL_PATTERNS.test(url);
   }
 
+  const ownDomains = new Set();
+  if (domain && !domain.startsWith('reddit-')) ownDomains.add(domain.toLowerCase().replace(/^www\./, ''));
+  if (metrics.website) {
+    try { ownDomains.add(new URL(metrics.website).hostname.toLowerCase().replace(/^www\./, '')); } catch {}
+  }
+  if (entity.website_url) {
+    try { ownDomains.add(new URL(entity.website_url).hostname.toLowerCase().replace(/^www\./, '')); } catch {}
+  }
+
+  function isNotBareHomepage(url) {
+    if (!isRealUrl(url)) return false;
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+      const path = parsed.pathname.replace(/\/+$/, '');
+      if (ownDomains.has(host) && (!path || path === '')) return false;
+      return true;
+    } catch { return false; }
+  }
+
   for (const key of allMetricKeys) {
-    if (key.endsWith('_source') && metrics[key] && !isRealUrl(metrics[key])) {
+    if (key.endsWith('_source') && metrics[key] && !isNotBareHomepage(metrics[key])) {
       metrics[key] = null;
     }
   }
@@ -170,6 +194,7 @@ async function enrichSingle(entity) {
     user_count: { type: 'user_count', sourceKey: 'user_count_source' },
     team_size: { type: 'team_size', sourceKey: 'team_size_source' },
     growth: { type: 'growth_rate', sourceKey: 'growth_source' },
+    monthly_traffic: { type: 'web_traffic', sourceKey: 'monthly_traffic_source' },
   };
 
   for (const [field, { type: signalType, sourceKey }] of Object.entries(signalMap)) {
@@ -177,7 +202,7 @@ async function enrichSingle(entity) {
       const sourceUrl = metrics[sourceKey] || null;
 
       let evidenceId = null;
-      if (sourceUrl && typeof sourceUrl === 'string' && sourceUrl.startsWith('http')) {
+      if (sourceUrl && isNotBareHomepage(sourceUrl)) {
         const evidenceDoc = {
           url: sourceUrl,
           type: signalType,
@@ -216,7 +241,7 @@ async function enrichSingle(entity) {
     }
   }
 
-  if (metrics.notable && metrics.notable_source && typeof metrics.notable_source === 'string' && metrics.notable_source.startsWith('http')) {
+  if (metrics.notable && metrics.notable_source && isNotBareHomepage(metrics.notable_source)) {
     await col('evidence').insertOne({
       url: metrics.notable_source,
       type: 'notable',
@@ -239,7 +264,7 @@ async function enrichSingle(entity) {
     enrichedWebsite = null;
   }
 
-  const hasRealData = nameMatches && !!(enrichedWebsite || metrics.revenue || metrics.funding || metrics.user_count || metrics.team_size || metrics.founded_year);
+  const hasRealData = nameMatches && !!(enrichedWebsite || metrics.revenue || metrics.funding || metrics.user_count || metrics.team_size || metrics.monthly_traffic || metrics.founded_year);
 
   const entityUpdates = { 'enrichment.web_verified': hasRealData };
   if (nameMatches && metrics.description) entityUpdates.description = metrics.description;
@@ -300,5 +325,5 @@ function levenshteinRatio(a, b) {
 function buildResearchQuery(name, domain, description) {
   const domainHint = domain && !domain.startsWith('reddit-') ? ` (${domain})` : '';
   const descHint = description ? ` — ${description}` : '';
-  return `Find the official website and company information for the AI startup "${name}"${domainHint}${descHint}. What is their website URL? Also find their current revenue or MRR, total funding raised, team size, user or customer count, growth metrics, and founding date. Include specific numbers and the official website URL. For every metric you find (revenue, funding, users, team size, growth), include the source URL where that information was published. Also find the most recent news articles, blog posts, or press coverage about this company — include the article title, URL, date, and a brief summary for each.`;
+  return `Find the official website and company information for the AI startup "${name}"${domainHint}${descHint}. What is their website URL? Also find their current revenue or MRR, total funding raised, team size, user or customer count, growth metrics, and founding date. Include specific numbers and the official website URL. Check SimilarWeb for their estimated monthly website traffic. Check StackShare, BuiltWith, or their GitHub/engineering blog for their tech stack. For every metric you find, include the source URL where that information was published (articles, Crunchbase, SimilarWeb, StackShare — not just the company homepage). Also find the most recent news articles, blog posts, or press coverage about this company — include the article title, URL, date, and a brief summary for each.`;
 }
