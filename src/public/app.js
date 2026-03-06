@@ -1117,6 +1117,42 @@ async function checkRunningPipeline() {
     if (hoveredNode?._id) openEntityModal(hoveredNode._id);
   });
 
+  let touchedNode = null;
+  canvas.addEventListener('touchstart', (e) => {
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const mx = touch.clientX - rect.left;
+    const my = touch.clientY - rect.top;
+    let closest = null;
+    let closestDist = 24;
+    for (const n of nodes) {
+      const d = Math.sqrt((n.x - mx) ** 2 + (n.y - my) ** 2);
+      if (d < closestDist) { closest = n; closestDist = d; }
+    }
+    if (closest) {
+      e.preventDefault();
+      if (touchedNode === closest) {
+        openEntityModal(closest._id);
+        touchedNode = null;
+        hoveredNode = null;
+        tooltip.classList.remove('visible');
+        return;
+      }
+      touchedNode = closest;
+      hoveredNode = closest;
+      let html = `<span class="tt-name">${closest.name}</span><span class="tt-cat">${closest.category}</span>`;
+      if (closest.metric) html += `<span class="tt-metric">${closest.metric}</span>`;
+      tooltip.innerHTML = html;
+      tooltip.classList.add('visible');
+      tooltip.style.left = Math.min(closest.x + 14, W - 200) + 'px';
+      tooltip.style.top = (closest.y - 44) + 'px';
+    } else {
+      touchedNode = null;
+      hoveredNode = null;
+      tooltip.classList.remove('visible');
+    }
+  }, { passive: false });
+
   async function load() {
     resize();
     try {
