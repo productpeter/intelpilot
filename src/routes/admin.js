@@ -72,16 +72,14 @@ router.get('/scan/triggers', async (req, res) => {
 router.use(adminAuth);
 
 router.post('/scan/run', async (req, res) => {
+  const jobs = getAllJobs();
+  if (jobs.scan?.status === 'running') {
+    return res.status(409).json({ error: 'A scan is already running' });
+  }
+
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const ua = req.headers['user-agent'] || 'none';
   const ref = req.headers['referer'] || req.headers['origin'] || 'none';
-
-  const lastTrigger = await col('scan_triggers').findOne({}, { sort: { triggered_at: -1 } });
-  const cooldown = 0;
-  if (lastTrigger && Date.now() - new Date(lastTrigger.triggered_at).getTime() < cooldown) {
-    const mins = Math.ceil((cooldown - (Date.now() - new Date(lastTrigger.triggered_at).getTime())) / 60000);
-    return res.status(429).json({ error: `Scan cooldown — try again in ${mins} min` });
-  }
 
   await col('scan_triggers').insertOne({ triggered_at: new Date(), ip, user_agent: ua, referer: ref });
   console.log(`[Admin] Scan triggered — ip=${ip} ua=${ua} referer=${ref}`);
@@ -126,6 +124,11 @@ router.post('/enrich', async (req, res) => {
 });
 
 router.post('/re-enrich', async (req, res) => {
+  const jobs = getAllJobs();
+  if (jobs['re-enrich']?.status === 'running') {
+    return res.status(409).json({ error: 'Re-enrichment is already running' });
+  }
+
   try {
     const entities = await col('entities')
       .find({ 'classification.is_startup': true })
@@ -228,6 +231,14 @@ router.delete('/entities', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+router.post('/scan/cleanup', async (req, res) => {
+  const result = await col('scan_runs').updateMany(
+    { status: 'running' },
+    { $set: { status: 'fail', finished_at: new Date() } },
+  );
+  res.json({ cleaned: result.modifiedCount });
 });
 
 router.delete('/wipe', async (req, res) => {
