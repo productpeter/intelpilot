@@ -13,6 +13,21 @@ const client = axios.create({
   timeout: 30_000,
 });
 
+export async function chatStream(messages, options = {}) {
+  const model = options.model || 'gpt-4o-mini';
+  const { data: stream } = await client.post(
+    '/chat/completions',
+    {
+      model,
+      messages,
+      temperature: options.temperature ?? 0.3,
+      stream: true,
+    },
+    { responseType: 'stream', timeout: 120_000 },
+  );
+  return stream;
+}
+
 export async function chatJson(systemPrompt, userContent, options = {}) {
   const model = options.model || 'gpt-4o-mini';
 

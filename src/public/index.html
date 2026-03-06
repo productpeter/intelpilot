@@ -114,6 +114,31 @@
   </div>
 </div>
 
+<button class="chat-fab" id="chat-fab" aria-label="Open AI Chat">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+</button>
+
+<div class="chat-panel" id="chat-panel" hidden>
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span>IntelPilot AI</span>
+    </div>
+    <button class="chat-close" id="chat-close">✕</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-msg assistant">
+      <div class="chat-msg-content">Hey! Ask me anything about the startups in our database — metrics, comparisons, trends, tech stacks, and more.</div>
+    </div>
+  </div>
+  <form class="chat-input-form" id="chat-form">
+    <input type="text" class="chat-input" id="chat-input" placeholder="Ask about startups…" autocomplete="off">
+    <button type="submit" class="chat-send" id="chat-send">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </form>
+</div>
+
 <script src="/app.js"></script>
 </body>
 </html>

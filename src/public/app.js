@@ -36,8 +36,13 @@ function setFeedback(text, type) {
   el.className = 'nav-feedback ' + (type || '');
 }
 
-async function api(method, path) {
-  const res = await fetch(`/api${path}`, { method });
+async function api(method, path, body) {
+  const opts = { method };
+  if (body !== undefined) {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(`/api${path}`, opts);
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
@@ -894,6 +899,109 @@ async function checkRunningPipeline() {
     // ignore — no running pipeline
   }
 }
+
+// ── Chat Panel ──
+const chatHistory = [];
+let chatStreaming = false;
+
+$('#chat-fab').addEventListener('click', () => {
+  const panel = $('#chat-panel');
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) $('#chat-input').focus();
+});
+
+$('#chat-close').addEventListener('click', () => {
+  $('#chat-panel').hidden = true;
+});
+
+function appendChatMsg(role, content) {
+  const el = document.createElement('div');
+  el.className = `chat-msg ${role}`;
+  el.innerHTML = `<div class="chat-msg-content">${content}</div>`;
+  $('#chat-messages').appendChild(el);
+  $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
+  return el.querySelector('.chat-msg-content');
+}
+
+function escChat(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderMarkdown(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
+$('#chat-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('#chat-input');
+  const msg = input.value.trim();
+  if (!msg || chatStreaming) return;
+
+  appendChatMsg('user', escChat(msg));
+  chatHistory.push({ role: 'user', content: msg });
+  input.value = '';
+
+  chatStreaming = true;
+  $('#chat-send').disabled = true;
+  const contentEl = appendChatMsg('assistant', '<span class="chat-typing">Thinking…</span>');
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, history: chatHistory.slice(-10) }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let sseBuffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuffer += decoder.decode(value, { stream: true });
+      const lines = sseBuffer.split('\n');
+      sseBuffer = lines.pop();
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') break;
+        try {
+          const { token, error } = JSON.parse(payload);
+          if (error) throw new Error(error);
+          if (token) {
+            fullText += token;
+            contentEl.innerHTML = renderMarkdown(escChat(fullText));
+            $('#chat-messages').scrollTop = $('#chat-messages').scrollHeight;
+          }
+        } catch {}
+      }
+    }
+
+    if (fullText) {
+      chatHistory.push({ role: 'assistant', content: fullText });
+    } else {
+      contentEl.innerHTML = '<em>No response received.</em>';
+    }
+  } catch (err) {
+    contentEl.innerHTML = `<span class="chat-error">Error: ${escChat(err.message)}</span>`;
+  } finally {
+    chatStreaming = false;
+    $('#chat-send').disabled = false;
+    $('#chat-input').focus();
+  }
+});
 
 checkHealth();
 loadEntities();
