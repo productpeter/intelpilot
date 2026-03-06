@@ -154,6 +154,14 @@ function renderEntities() {
 
   $('#entity-count').textContent = `${total} startup${total !== 1 ? 's' : ''}`;
 
+  const isHome = currentPage === 1;
+  const hero = document.querySelector('.hero-heading');
+  const viz = document.querySelector('.cluster-viz-wrap');
+  const chatBar = document.getElementById('chat-bar');
+  if (hero) hero.style.display = isHome ? '' : 'none';
+  if (viz) viz.style.display = isHome ? '' : 'none';
+  if (chatBar) chatBar.style.display = isHome ? '' : 'none';
+
   if (!page.length) {
     grid.innerHTML = '<div class="grid-empty">No startups found.</div>';
     $('#pagination').innerHTML = '';
@@ -1036,18 +1044,17 @@ async function checkRunningPipeline() {
       }
     }
 
-    ctx.globalAlpha = 0.55;
     ctx.textAlign = 'center';
     for (const c of clusterCenters) {
       if (c.count < 5) continue;
       const label = c.cat.replace('AI ', '');
-      ctx.font = '600 9.5px Inter, system-ui, sans-serif';
+      ctx.globalAlpha = 0.9;
+      ctx.font = '700 13px Inter, system-ui, sans-serif';
       ctx.fillStyle = c.color;
-      ctx.fillText(label, c.cx, c.cy - 22);
-      ctx.globalAlpha = 0.28;
-      ctx.font = '500 7.5px Inter, system-ui, sans-serif';
-      ctx.fillText(c.count + '', c.cx, c.cy - 13);
-      ctx.globalAlpha = 0.55;
+      ctx.fillText(label, c.cx, c.cy - 24);
+      ctx.globalAlpha = 0.5;
+      ctx.font = '600 9.5px Inter, system-ui, sans-serif';
+      ctx.fillText(c.count + ' startups', c.cx, c.cy - 10);
     }
 
     ctx.globalAlpha = 1;
@@ -1305,6 +1312,25 @@ $('#chat-form').addEventListener('submit', (e) => {
 });
 
 startExampleRotation();
+
+$('#btn-nav-chat').addEventListener('click', () => {
+  const chatBar = document.getElementById('chat-bar');
+  if (chatBar && chatBar.style.display !== 'none') {
+    $('#chat-input').focus();
+    chatBar.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    openChatModal();
+  }
+});
+
+$('#nav-brand-link').addEventListener('click', (e) => {
+  e.preventDefault();
+  currentPage = 1;
+  searchQuery = '';
+  $('#search-input').value = '';
+  renderEntities();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 checkHealth();
 loadEntities();

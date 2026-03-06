@@ -10,14 +10,18 @@
 <body>
 <nav class="navbar">
   <div class="nav-inner">
-    <div class="nav-brand">
+    <a href="/" class="nav-brand" id="nav-brand-link">
       <span class="logo">◆</span>
       <span class="brand-name">IntelPilot</span>
-    </div>
+    </a>
     <div class="nav-status" id="status">
       <span class="pulse"></span>
       <span class="status-text">Connecting…</span>
     </div>
+    <button class="nav-btn ghost nav-chat-btn" id="btn-nav-chat">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Ask AI
+    </button>
     <div class="nav-actions">
       <div class="nav-btn-wrap">
         <button id="btn-scan" class="nav-btn scan">
@@ -156,6 +160,21 @@
     </form>
   </div>
 </div>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <span class="logo">◆</span>
+      <span>IntelPilot</span>
+    </div>
+    <p class="footer-tagline">Agentic intelligence for the AI startup ecosystem.</p>
+    <div class="footer-links">
+      <a href="/report" target="_blank">Latest Report</a>
+      <span class="footer-sep">·</span>
+      <a href="/api/health" target="_blank">API</a>
+    </div>
+  </div>
+</footer>
 
 <script src="/app.js"></script>
 </body>
