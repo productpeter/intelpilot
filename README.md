@@ -25,6 +25,7 @@ Agentic research system that continuously monitors the web for **AI startup sign
 - [Report Generation](#report-generation)
 - [Cron Schedules](#cron-schedules)
 - [Frontend Dashboard](#frontend-dashboard)
+- [AI Chat (RAG)](#ai-chat-rag)
 - [Deployment (Railway)](#deployment-railway)
 
 ---
@@ -43,11 +44,13 @@ This MVP covers **discovery + classification + enrichment + report generation**.
 2. **Extract** — Uses Tabstack API to pull structured data from each candidate URL (including explicit product website URL detection)
 3. **Classify** — OpenAI `gpt-4o-mini` classifies each entity: is it an AI startup with an identifiable product name?
 4. **Deduplicate** — Three-tier entity resolution (domain match → name match → vector similarity via Atlas Vector Search)
-5. **Enrich** — All unenriched startup entities are automatically researched via Tabstack `/research` endpoint (no cap), then metrics are extracted with GPT (with name-matching validation and dead domain detection)
+5. **Enrich** — All unenriched startup entities are automatically researched via Tabstack `/research` endpoint (no cap), then metrics are extracted with GPT (revenue, funding, team size, users, growth, website traffic via SimilarWeb, tech stack via StackShare/BuiltWith, with name-matching validation and dead domain detection)
 6. **Verify** — Entities enriched but with no web presence are heavily penalized; parked/dead domains are auto-delisted
 7. **Report** — Automatically generated after enrichment; shows only **newly discovered startups since the last report**, sorted chronologically (newest first), with source badges and discovery timestamps
 
 The entire pipeline (steps 1–7) runs as a single automated flow — triggered by the "Scan" button or the daily cron job.
+
+8. **Chat (RAG)** — Ask natural language questions about the database. User queries are embedded and matched against startup entities via Atlas Vector Search, then relevant entity data is fed as context to GPT for grounded, streaming responses.
 
 ---
 
@@ -61,7 +64,7 @@ The entire pipeline (steps 1–7) runs as a single automated flow — triggered 
 | Vector Search | MongoDB Atlas Vector Search (cosine, 3072 dims) |
 | Web Extraction | Tabstack API (`/v1/extract/json`, `/v1/extract/markdown`, `/v1/research`) |
 | Embeddings | OpenAI `text-embedding-3-large` (3072 dimensions) |
-| LLM Classification | OpenAI `gpt-4o-mini` (entity classification + metric extraction) |
+| LLM Classification | OpenAI `gpt-4o-mini` (entity classification + metric extraction + RAG chat) |
 | Object Storage | Cloudflare R2 via `@aws-sdk/client-s3` |
 | Scheduling | `node-cron` |
 | Frontend | Embedded static HTML/CSS/JS dashboard (no build step) |
@@ -91,7 +94,7 @@ src/
 │   └── mongo.js             # MongoDB connection, collection helper, indexes
 ├── lib/
 │   ├── tabstack.js          # Tabstack client (extract JSON, markdown, research SSE)
-│   ├── openai.js            # OpenAI chat completions client (classify + extract)
+│   ├── openai.js            # OpenAI client (chatJson for classification/extraction, chatStream for RAG)
 │   ├── embeddings.js        # OpenAI embeddings with retry/backoff
 │   ├── r2.js                # Cloudflare R2 snapshot storage
 │   ├── signals.js           # Regex-based signal extraction heuristics
@@ -122,7 +125,8 @@ src/
 │   ├── health.js            # GET /api/health
 │   ├── reports.js           # GET /api/reports/*
 │   ├── entities.js          # GET /api/entities/*
-│   └── admin.js             # POST /api/admin/*
+│   ├── admin.js             # POST /api/admin/*
+│   └── chat.js              # POST /api/chat (RAG: embed query → vector search → GPT stream)
 ├── middleware/
 │   ├── errorHandler.js      # Global error handler
 │   └── auth.js              # Admin bearer token auth
@@ -227,6 +231,7 @@ The server connects to MongoDB, ensures indexes, starts cron jobs, and listens o
 | `/api/admin/scan/status` | GET | Live scan progress (running state, counts, recent runs with source names). Auto-cleans stale runs (>25 min) |
 | `/api/admin/jobs` | GET | Live progress for all operations (scan, report, enrich) |
 | `/api/admin/scan/triggers` | GET | Last 20 scan trigger records (IP, user-agent, referer, timestamp) |
+| `/api/chat` | POST | RAG chat — embed query, vector search relevant startups, stream GPT response. Body: `{ message, history[] }` |
 
 ### Admin Endpoints
 
@@ -360,8 +365,8 @@ Cost: ~$0.001 per classification with gpt-4o-mini.
 All classified AI startups are enriched via Tabstack's `/research` SSE endpoint for deeper, verified data.
 
 **Pipeline:**
-1. Tabstack `/research` searches the web for the startup (asking specifically for website URL, revenue, funding, team size, users, growth)
-2. The research report (streamed via SSE) is fed to `gpt-4o-mini` to extract structured metrics plus `matched_name` and `domain_status`
+1. Tabstack `/research` searches the web for the startup (asking specifically for website URL, revenue, funding, team size, users, growth, monthly traffic via SimilarWeb, and tech stack via StackShare/BuiltWith)
+2. The research report (streamed via SSE) is fed to `gpt-4o-mini` to extract structured metrics plus `matched_name` and `domain_status`. Source URLs must be verifiable — bare company homepages are rejected as evidence (deep pages like `/blog/funding-announcement` are allowed)
 3. **Name validation:** the `matched_name` from the research is compared to the entity name (substring match or Levenshtein ratio ≥ 0.7). If they don't match, the description, website, and signals are **not** overwritten (prevents contamination from similarly-named companies)
 4. **Domain status:** if the research indicates the domain is `parked`, `for_sale`, or `dead`, the entity is automatically marked as not a startup and excluded from future reports
 5. A `web_verified` flag is set — if research found real data (and names matched), the entity is verified; otherwise it's unverified
@@ -437,7 +442,7 @@ Cost: ~1 Tabstack credit per `/research` call.
 | `identifiers` | object | `{ github, twitter, producthunt, hackernews, reddit }` |
 | `website_url` | string | Actual product website URL, aggregator URLs excluded (nullable) |
 | `classification` | object | LLM classification: `{ is_startup, confidence, clean_name, one_liner, category, website_url, classified_at }` |
-| `enrichment` | object | Research enrichment: `{ research_text, metrics, name_matched, web_verified, domain_status, enriched_at }` |
+| `enrichment` | object | Research enrichment: `{ research_text, metrics, recent_news, name_matched, web_verified, domain_status, enriched_at }`. Metrics include: revenue, funding, team_size, user_count, growth, monthly_traffic, tech_stack (each with `_source` URL), founded_year, notable, description, website |
 | `created_at` | Date | Creation time |
 | `updated_at` | Date | Last update time |
 | `embedding` | number[] | 3072-dim vector (nullable) |
@@ -586,20 +591,47 @@ The app serves an embedded dashboard at `/` — no separate frontend build or de
 
 ### Features
 
-- **Entity Grid** — all discovered AI startups displayed as cards with metrics (revenue, funding, users, team size), search, category filter, and sorting (Revenue First, Recently Updated, Newest First, Name A–Z)
-- **Entity Detail Modal** — click any card to see full metrics, signals, evidence, source mentions, and discovery timeline
+- **Entity Grid** — all discovered AI startups displayed as cards with emoji metric badges (💰 revenue, 🚀 funding, 📊 traffic, 👥 users, 🧑‍💻 team size), search, category filter, and sorting (Revenue First, Recently Updated, Newest First, Name A–Z)
+- **Entity Detail Modal** — click any card to see full metrics with source links, tech stack tags, recent news, signals, evidence, source mentions, and discovery timeline
+- **AI Chat (RAG)** — centered chat bar with rotating example question chips; type a question or click an example to open a streaming conversation modal grounded in real startup data from the database
 - **Scan Pipeline** — one-click "Scan for New Startups" button triggers the full pipeline (scan → enrich → report) with a **3-step progress tracker** showing live status for each stage (e.g. "600 sources crawled · 56 unseen · 10 extracted")
-- **Pipeline Persistence** — refreshing the page mid-scan automatically detects and resumes progress tracking
+- **Re-enrich All** — one-click button to re-run enrichment on all entities, updating metrics, evidence links, news, tech stack, and traffic data. Shows independent progress bar alongside any running scan
+- **Pipeline Persistence** — refreshing the page mid-scan automatically detects and resumes progress tracking for both scan and re-enrich jobs
 - **Smart Entity Names** — frontend `bestName()` picks the best non-generic name across `clean_name`, `matched_name`, and `name`
 - **Startup Reports** — unified dropdown in the navbar listing all reports (latest highlighted); each opens in an in-app dark-themed modal
+- **Concurrent Job Protection** — guards prevent duplicate scan or re-enrich jobs from running simultaneously
 - **Stale Run Cleanup** — scan runs stuck for 25+ minutes are auto-marked as failed; per-source 20-minute timeout prevents pipeline stalls
-- **Scan Audit Logging** — every scan trigger is logged with IP, user-agent, and referer for audit
-- **Tech Stack** — footer showing all technologies used
 - **Responsive** — mobile-friendly with scrollable navbar, horizontal pipeline step cards, and single-column grid
 
 ### Architecture
 
 Static files (`index.html`, `style.css`, `app.js`) are served from `src/public/` via `express.static`. No bundler, no framework — vanilla HTML/CSS/JS with `fetch` for API calls and DOM manipulation for updates. Responses are Gzip-compressed via the `compression` middleware.
+
+---
+
+## AI Chat (RAG)
+
+The dashboard includes a built-in AI chat powered by Retrieval-Augmented Generation (RAG). It lets users ask natural language questions about the startup database and get answers grounded in real data.
+
+### How It Works
+
+1. **User asks a question** — e.g. "Which startups raised the most funding?" or "Compare AI video companies"
+2. **Embed the query** — the question is embedded using the same `text-embedding-3-large` model used for entity deduplication
+3. **Vector search** — the embedded query is matched against entity embeddings via MongoDB Atlas `$vectorSearch`, returning the 12 most relevant startups
+4. **Build context** — each matched entity's full profile (name, domain, category, description, revenue, funding, team size, users, growth, traffic, tech stack, notable facts, recent news) is formatted as context
+5. **Stream GPT response** — the context + conversation history is sent to `gpt-4o-mini`, which responds grounded in the retrieved data. The response streams token-by-token via SSE (Server-Sent Events)
+
+### Frontend UX
+
+- **Centered chat bar** — positioned between the toolbar and entity grid, styled like modern AI input bars
+- **Rotating example questions** — 3 clickable chips cycle through 12 preset questions every 6 seconds, giving users instant starting points
+- **Conversation modal** — typing a question or clicking an example opens a centered modal overlay with streaming chat messages
+- **Conversation memory** — up to 10 messages of history are sent with each request for contextual follow-ups
+- **Markdown rendering** — responses support bold, italic, and code formatting
+
+### Endpoint
+
+`POST /api/chat` — accepts `{ message: string, history: [{ role, content }] }`, returns an SSE stream of `{ token }` events.
 
 ---
 
