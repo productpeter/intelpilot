@@ -142,7 +142,7 @@ router.post('/re-enrich', async (req, res) => {
     );
 
     res.json({ message: `Re-enrichment started for ${entities.length} entities`, count: entities.length });
-    enrichEntities(entities, 'enrich').catch((err) =>
+    enrichEntities(entities, 're-enrich').catch((err) =>
       console.error('[Admin] Re-enrichment error:', err),
     );
   } catch (err) {

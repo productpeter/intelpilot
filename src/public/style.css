@@ -383,6 +383,12 @@ body {
 body {
   background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
   background-size: 24px 24px;
+  animation: dot-drift 20s linear infinite;
+}
+
+@keyframes dot-drift {
+  from { background-position: 0 0; }
+  to { background-position: 24px 24px; }
 }
 
 /* Toolbar */

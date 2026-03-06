@@ -610,10 +610,10 @@ async function pollPipeline() {
       const summary = noReport
         ? 'Pipeline complete — no new startups found this scan'
         : 'Pipeline complete — scan, enrich & report done';
-      setFeedback(summary, noReport ? 'info' : 'success');
+      setFeedback(enrichTimer ? 'Pipeline complete — re-enrichment still running' : summary, enrichTimer ? 'loading' : (noReport ? 'info' : 'success'));
       $('#btn-scan').disabled = false;
       stopPipelinePolling();
-      setTimeout(() => { hidePipeline(); setFeedback('', ''); }, 12000);
+      setTimeout(() => { hidePipeline(); if (!enrichTimer) setFeedback('', ''); }, 12000);
     }
   } catch {
     stopPipelinePolling();
@@ -650,24 +650,24 @@ function updateEnrichBar(completed, failed, total) {
 async function pollEnrichOnly() {
   try {
     const jobs = await api('GET', '/admin/jobs');
-    const ej = jobs.enrich;
+    const ej = jobs['re-enrich'];
     if (ej?.status === 'running') {
       updateEnrichBar(ej.completed || 0, ej.failed || 0, ej.total || 0);
     } else if (ej?.status === 'done') {
       const msg = typeof ej.message === 'string' ? ej.message : 'complete';
       $('#enrich-detail').textContent = msg;
       $('#enrich-fill').style.width = '100%';
-      setFeedback('Re-enrichment complete', 'success');
+      if (!pipelineTimer) setFeedback('Re-enrichment complete', 'success');
       $('#btn-enrich').disabled = false;
       stopEnrichPolling();
       loadEntities();
-      setTimeout(() => { hideEnrichProgress(); setFeedback('', ''); }, 8000);
+      setTimeout(() => { hideEnrichProgress(); if (!pipelineTimer) setFeedback('', ''); }, 8000);
     } else if (ej?.status === 'error') {
       $('#enrich-detail').textContent = 'failed';
-      setFeedback('Re-enrichment failed', 'error');
+      if (!pipelineTimer) setFeedback('Re-enrichment failed', 'error');
       $('#btn-enrich').disabled = false;
       stopEnrichPolling();
-      setTimeout(() => { hideEnrichProgress(); setFeedback('', ''); }, 5000);
+      setTimeout(() => { hideEnrichProgress(); if (!pipelineTimer) setFeedback('', ''); }, 5000);
     }
   } catch {
     stopEnrichPolling();
@@ -825,6 +825,15 @@ async function checkRunningPipeline() {
     const scanRunning = scanJobActive || scanRunsActive;
     const enrichRunning = jobs.enrich?.status === 'running';
     const reportRunning = jobs.report?.status === 'running';
+    const reEnrichRunning = jobs['re-enrich']?.status === 'running';
+
+    if (reEnrichRunning) {
+      $('#btn-enrich').disabled = true;
+      showEnrichProgress();
+      const ej = jobs['re-enrich'];
+      updateEnrichBar(ej.completed || 0, ej.failed || 0, ej.total || 0);
+      startEnrichPolling();
+    }
 
     if (!scanRunning && !enrichRunning && !reportRunning) return;
 
