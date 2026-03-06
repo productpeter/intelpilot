@@ -942,14 +942,13 @@ async function checkRunningPipeline() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  const PAD = 30;
-
   function buildNodes(data) {
     nodes = [];
     clusterCenters = [];
     const cats = {};
     const mobile = W < 500;
     const s = mobile ? 0.55 : 1;
+    const pad = mobile ? 10 : 30;
 
     for (const d of data) {
       const cat = d.category || 'Other';
@@ -957,8 +956,8 @@ async function checkRunningPipeline() {
       const hasRevenue = !!d.revenue;
       const hasFunding = !!d.funding;
       const size = (hasRevenue ? 5.5 : hasFunding ? 4 : 2.5) * s;
-      const px = PAD + d.x * (W - PAD * 2);
-      const py = PAD + d.y * (H - PAD * 2);
+      const px = pad + d.x * (W - pad * 2);
+      const py = pad + d.y * (H - pad * 2);
 
       if (!cats[cat]) cats[cat] = { sx: 0, sy: 0, n: 0, color };
       cats[cat].sx += px;
@@ -1166,10 +1165,11 @@ function showExamples() {
   const container = $('#chat-examples');
   container.innerHTML = '';
   const batch = [];
-  for (let i = 0; i < 3; i++) {
+  const count = window.innerWidth < 500 ? 2 : 3;
+  for (let i = 0; i < count; i++) {
     batch.push(EXAMPLE_QUESTIONS[(exampleIdx + i) % EXAMPLE_QUESTIONS.length]);
   }
-  exampleIdx = (exampleIdx + 3) % EXAMPLE_QUESTIONS.length;
+  exampleIdx = (exampleIdx + count) % EXAMPLE_QUESTIONS.length;
   batch.forEach((q) => {
     const chip = document.createElement('button');
     chip.className = 'chat-example-chip fade-in';
