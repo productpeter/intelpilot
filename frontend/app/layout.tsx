@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Script from "next/script";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "IntelPilot — AI Startup Intelligence",
@@ -17,14 +17,7 @@ export default function RootLayout({
       <head>
         <link rel="stylesheet" href="/style.css" />
       </head>
-      <body>
-        {children}
-        <Script
-          src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"
-          strategy="beforeInteractive"
-        />
-        <Script src="/app.js" strategy="afterInteractive" />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
