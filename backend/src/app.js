@@ -1,6 +1,4 @@
 import express from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -9,17 +7,19 @@ import routes from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { col } from './db/mongo.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(compression());
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || '*',
+    credentials: true,
+  }),
+);
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api', routes);
 

@@ -1,7 +1,7 @@
 {
-  "name": "intelpilot",
+  "name": "intelpilot-backend",
   "version": "1.0.0",
-  "description": "Agentic research system for web intelligence monitoring",
+  "description": "IntelPilot API server — agentic research system for web intelligence monitoring",
   "type": "module",
   "main": "src/index.js",
   "scripts": {

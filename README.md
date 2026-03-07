@@ -67,71 +67,53 @@ The entire pipeline (steps 1–7) runs as a single automated flow — triggered 
 | LLM Classification | OpenAI `gpt-4o-mini` (entity classification + metric extraction + RAG chat) |
 | Object Storage | Cloudflare R2 via `@aws-sdk/client-s3` |
 | Scheduling | `node-cron` |
-| Frontend | Embedded static HTML/CSS/JS dashboard (no build step) |
-| Hosting | Railway (auto-deploy from GitHub) |
+| Frontend | Next.js 16 (App Router, TypeScript) |
+| Hosting | Railway (two services from one monorepo — auto-deploy from GitHub) |
 
 ### Dependencies
 
-**Runtime:** `express`, `dotenv`, `axios`, `mongodb`, `node-cron`, `@aws-sdk/client-s3`, `cors`, `helmet`, `morgan`, `compression`
+**Backend:** `express`, `dotenv`, `axios`, `mongodb`, `node-cron`, `@aws-sdk/client-s3`, `cors`, `helmet`, `morgan`, `compression`
 
-**Dev:** `nodemon`
+**Frontend:** `next`, `react`, `react-dom`
+
+**Dev:** `nodemon`, `typescript`, `eslint`
 
 ---
 
 ## Project Structure
 
+Monorepo with two independently deployable services:
+
 ```
-src/
-├── index.js                 # Server entry point
-├── app.js                   # Express app (middleware, static files, routes, /report page)
-├── public/
-│   ├── index.html           # Dashboard UI (scan, entity grid, report modal, pipeline progress)
-│   ├── style.css            # Dashboard styles (dark theme, cards, modals, responsive)
-│   └── app.js               # Frontend logic (API calls, pipeline polling, entity grid, report modal)
-├── config/
-│   └── index.js             # Centralized environment config
-├── db/
-│   └── mongo.js             # MongoDB connection, collection helper, indexes
-├── lib/
-│   ├── tabstack.js          # Tabstack client (extract JSON, markdown, research SSE)
-│   ├── openai.js            # OpenAI client (chatJson for classification/extraction, chatStream for RAG)
-│   ├── embeddings.js        # OpenAI embeddings with retry/backoff
-│   ├── r2.js                # Cloudflare R2 snapshot storage
-│   ├── signals.js           # Regex-based signal extraction heuristics
-│   └── namefix.js           # Entity name correction (generic → enrichment matched_name)
-├── sources/
-│   ├── index.js             # Source registry
-│   ├── producthunt.js       # Product Hunt 15-day leaderboard (via Tabstack extract)
-│   ├── hackernews.js        # Hacker News Show HN (top 500, Firebase API, batched 50 at a time)
-│   ├── rss.js               # 11 feeds: TLDR AI/Founders/WebDev, HN×3, TAAFT×4, Ben's Bites
-│   ├── reddit.js            # 13 subreddits × hot+new, paginated (batched 4 subs at a time)
-│   ├── betalist.js          # BetaList 3 pages: startups, AI market, SaaS market
-│   ├── futuretools.js       # FutureTools 11 pages (popular, newest, freemium + pagination)
-│   ├── techcrunch.js        # TechCrunch 16 pages (7 categories × pagination)
-│   ├── aitoolsdirectory.js  # 23 pages across Toolify, aitools.fyi, TopAI.tools, Uneed, SaaSHub
-│   ├── yclaunches.js        # YC 10 pages (launches + 5 batches + AI/DevTools/SaaS tags)
-│   ├── github.js            # GitHub Trending 11 pages (3 periods × 6 languages)
-│   └── venturebeat.js       # VentureBeat 11 pages (6 categories × pagination)
-├── services/
-│   ├── scanner.js           # Concurrent scan orchestration (20-min per-source timeout) + auto-enrich + URL/name fix + auto-report
-│   ├── extractor.js         # Tabstack extraction + product URL resolution + classifier integration
-│   ├── classifier.js        # LLM startup classification (gpt-4o-mini)
-│   ├── enricher.js          # Tabstack /research enrichment + name validation + bad URL override + dead domain detection
-│   ├── entities.js          # Entity resolution + vector dedup
-│   ├── reports.js           # New-discoveries report generation, URL verification, dark-theme HTML
-│   └── progress.js          # In-memory job progress tracking for dashboard polling
-├── routes/
-│   ├── index.js             # Route aggregator
-│   ├── health.js            # GET /api/health
-│   ├── reports.js           # GET /api/reports/*
-│   ├── entities.js          # GET /api/entities/*
-│   ├── admin.js             # POST /api/admin/*
-│   └── chat.js              # POST /api/chat (RAG: embed query → vector search → GPT stream)
-├── middleware/
-│   ├── errorHandler.js      # Global error handler
-│   └── auth.js              # Admin bearer token auth
-└── cron/
-    └── index.js             # Daily scan cron (full pipeline: scan → enrich → report)
+intelpilot/
+├── frontend/                # Next.js 16 (App Router, TypeScript)
+│   ├── app/
+│   │   ├── layout.tsx       # Root layout, meta, script loading
+│   │   ├── page.tsx         # Dashboard page (server-rendered HTML shell)
+│   │   └── globals.css
+│   ├── public/
+│   │   ├── style.css        # Dashboard styles (dark theme, responsive)
+│   │   └── app.js           # Client-side logic (API calls, pipeline polling, entity grid, chat, viz)
+│   ├── next.config.ts       # API proxy rewrites (/api/* → backend)
+│   ├── railway.toml         # Railway deploy config
+│   └── package.json
+│
+├── backend/                 # Express.js API server
+│   ├── src/
+│   │   ├── index.js         # Server entry point
+│   │   ├── app.js           # Express app (middleware, CORS, routes, /report page)
+│   │   ├── config/          # Centralized environment config
+│   │   ├── db/              # MongoDB connection, collection helper, indexes
+│   │   ├── lib/             # Tabstack, OpenAI, embeddings, R2, signals, namefix
+│   │   ├── sources/         # 14 discovery sources (Product Hunt, HN, Reddit, etc.)
+│   │   ├── services/        # Scanner, extractor, classifier, enricher, entities, reports, progress
+│   │   ├── routes/          # health, entities, admin, reports, chat (RAG)
+│   │   ├── middleware/      # Error handler, admin auth
+│   │   └── cron/            # Daily scan cron
+│   ├── railway.toml         # Railway deploy config
+│   └── package.json
+│
+└── README.md
 ```
 
 ---
@@ -141,20 +123,32 @@ src/
 ```bash
 git clone <repo-url>
 cd intelpilot
+
+# Backend
+cd backend
 npm install
 cp .env.example .env
 # Fill in all values in .env (see Environment Variables below)
+
+# Frontend
+cd ../frontend
+npm install
+cp .env.example .env.local
+# Set BACKEND_URL if backend runs on a different port
 ```
 
 ---
 
 ## Environment Variables
 
+### Backend (`backend/.env`)
+
 | Variable | Required | Description |
 | --- | --- | --- |
 | `NODE_ENV` | No | `development` or `production` (default: `development`) |
 | `PORT` | No | Server port (default: `3000`) |
 | `ADMIN_TOKEN` | No | Bearer token for admin endpoints (skipped in dev if set to placeholder) |
+| `FRONTEND_URL` | No | Frontend origin for CORS (default: `*`) |
 | `MONGODB_URI` | **Yes** | MongoDB Atlas connection string |
 | `MONGODB_DB` | No | Database name (default: `intelpilot`) |
 | `TABSTACK_API_KEY` | **Yes** | Tabstack API key from [console.tabstack.ai](https://console.tabstack.ai) |
@@ -170,6 +164,12 @@ cp .env.example .env
 | `R2_REGION` | No | R2 region (default: `auto`) |
 
 R2 is optional — if `R2_ENDPOINT` is not set, snapshot uploads are skipped gracefully.
+
+### Frontend (`frontend/.env.local`)
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `BACKEND_URL` | No | Backend API URL for proxy rewrites (default: `http://localhost:3000`) |
 
 ---
 
@@ -203,14 +203,18 @@ The app auto-creates all collections and regular indexes on first connect. The v
 ## Running
 
 ```bash
-# Development (auto-reload via nodemon)
-npm run dev
+# Backend (port 3000)
+cd backend
+npm run dev          # Development (auto-reload via nodemon)
+npm start            # Production
 
-# Production
-npm start
+# Frontend (port 3001)
+cd frontend
+npm run dev          # Development (Next.js dev server)
+npm run build && npm start  # Production
 ```
 
-The server connects to MongoDB, ensures indexes, starts cron jobs, and listens on the configured port.
+The backend connects to MongoDB, ensures indexes, starts cron jobs, and listens on port 3000. The frontend proxies `/api/*` requests to the backend via Next.js rewrites.
 
 ---
 
@@ -637,17 +641,29 @@ The dashboard includes a built-in AI chat powered by Retrieval-Augmented Generat
 
 ## Deployment (Railway)
 
-The app is deployed to [Railway](https://railway.app) with automatic GitHub integration.
+The app runs as two independent Railway services from a single monorepo. Frontend-only changes never restart the backend, and vice versa.
+
+### Architecture
+
+| | Frontend Service | Backend Service |
+|---|---|---|
+| **Root Directory** | `frontend/` | `backend/` |
+| **Build Command** | `npm run build` | *(auto-detected)* |
+| **Start Command** | `npm start` | `npm start` |
+| **Watch Paths** | `frontend/**` | `backend/**` |
+| **Key Env Vars** | `BACKEND_URL` | `MONGODB_URI`, `OPENAI_API_KEY`, etc. |
 
 ### Setup
 
 1. Connect your GitHub repo to a new Railway project
-2. Set all [environment variables](#environment-variables) in Railway's dashboard
-3. Railway auto-detects `npm start` from `package.json`
-4. Set the **target port** in Railway Networking to match the auto-assigned `PORT` (typically `8080`)
+2. Create **two services** from the same repo:
+   - **Backend:** Set root directory to `backend/`, add all backend environment variables
+   - **Frontend:** Set root directory to `frontend/`, set `BACKEND_URL` to the backend's private Railway URL (e.g. `http://backend.railway.internal:PORT`)
+3. Railway's internal networking keeps API traffic within its private network (fast, no egress cost)
+4. Configure watch paths so each service only redeploys when its directory changes
 
 ### Requirements
 
 - **MongoDB Atlas:** add `0.0.0.0/0` to the Atlas Network Access IP allowlist so Railway's dynamic IPs can connect
-- **No Dockerfile needed** — Railway uses Nixpacks to detect Node.js and runs `npm start`
-- Pushes to `main` trigger automatic redeployments
+- **No Dockerfile needed** — Railway uses Nixpacks to detect Node.js
+- Pushes to `main` trigger redeployment only for services whose watched files changed
